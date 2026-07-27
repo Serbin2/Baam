@@ -13,6 +13,11 @@ void UBangCardWidget::NativePreConstruct()
 	RefreshVisual();
 }
 
+void UBangCardWidget::SetOwningHand(UBangHandWidget* InHand)
+{
+	OwningHand = InHand;
+}
+
 void UBangCardWidget::SetCardView(const FBangCardView& InCardView)
 {
 	CardView = InCardView;

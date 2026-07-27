@@ -35,7 +35,8 @@ public:
 	int32 GetInstanceId() const { return CardView.InstanceId; }
 
 	/** 이 카드를 소유한 핸드 위젯. 핸드가 카드를 만들 때 설정한다. */
-	void SetOwningHand(UBangHandWidget* InHand) { OwningHand = InHand; }
+	// 정의는 .cpp 에 있다 - TWeakObjectPtr 대입은 완전한 타입을 요구한다.
+	void SetOwningHand(UBangHandWidget* InHand);
 
 	/** 드래그 중인 원본 카드를 흐리게 표시한다. 드롭/취소 시 false 로 복구된다. */
 	UFUNCTION(BlueprintCallable, Category = "Bang|Card")

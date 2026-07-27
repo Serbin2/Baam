@@ -28,8 +28,9 @@ public:
 	UPROPERTY()
 	TWeakObjectPtr<UBangHandWidget> SourceHandWidget;
 
-	virtual void Drop(const FPointerEvent& PointerEvent) override;
-	virtual void DragCancelled(const FPointerEvent& PointerEvent) override;
+	// Drop / DragCancelled 은 BlueprintNativeEvent 이므로 _Implementation 을 재정의한다.
+	virtual void Drop_Implementation(const FPointerEvent& PointerEvent) override;
+	virtual void DragCancelled_Implementation(const FPointerEvent& PointerEvent) override;
 
 private:
 	/** 성공/취소 어느 쪽이든 원본 위젯의 드래그 표시를 되돌린다. */

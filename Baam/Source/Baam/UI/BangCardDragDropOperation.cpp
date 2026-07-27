@@ -3,16 +3,16 @@
 #include "UI/BangCardDragDropOperation.h"
 #include "UI/BangCardWidget.h"
 
-void UBangCardDragDropOperation::Drop(const FPointerEvent& PointerEvent)
+void UBangCardDragDropOperation::Drop_Implementation(const FPointerEvent& PointerEvent)
 {
 	RestoreSourceWidget();
-	Super::Drop(PointerEvent);
+	Super::Drop_Implementation(PointerEvent);
 }
 
-void UBangCardDragDropOperation::DragCancelled(const FPointerEvent& PointerEvent)
+void UBangCardDragDropOperation::DragCancelled_Implementation(const FPointerEvent& PointerEvent)
 {
 	RestoreSourceWidget();
-	Super::DragCancelled(PointerEvent);
+	Super::DragCancelled_Implementation(PointerEvent);
 }
 
 void UBangCardDragDropOperation::RestoreSourceWidget()

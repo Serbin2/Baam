@@ -36,8 +36,9 @@ void UBangHandWidget::SetHand(const TArray<FBangCardView>& InCards)
 		CardWidget->SetOwningHand(this);
 		CardWidget->SetCardView(Card);
 
-		UPanelSlot* Slot = Box_Cards->AddChild(CardWidget);
-		if (UHorizontalBoxSlot* HBoxSlot = Cast<UHorizontalBoxSlot>(Slot))
+		// 'Slot' 은 UWidget 의 멤버명이므로 섀도잉을 피한다 (C4458 은 에러로 승격됨).
+		UPanelSlot* AddedSlot = Box_Cards->AddChild(CardWidget);
+		if (UHorizontalBoxSlot* HBoxSlot = Cast<UHorizontalBoxSlot>(AddedSlot))
 		{
 			HBoxSlot->SetPadding(CardPadding);
 			HBoxSlot->SetVerticalAlignment(VAlign_Bottom);
