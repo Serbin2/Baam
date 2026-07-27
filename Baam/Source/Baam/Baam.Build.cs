@@ -8,7 +8,14 @@ public class Baam : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
+			// --- GAS (Team4Project 의 GAS 시스템과 동일 구성) ---
+			"GameplayAbilities",   // UGameplayAbility / UGameplayEffect / UAttributeSet
+			"GameplayTags",        // NativeGameplayTags (UE_DEFINE_GAMEPLAY_TAG)
+			"GameplayTasks"        // UAbilityTask (응답 창 WaitForResolution 등)
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
