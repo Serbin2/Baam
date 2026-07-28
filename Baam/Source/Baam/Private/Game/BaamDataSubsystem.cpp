@@ -5,6 +5,7 @@
 #include "UObject/ConstructorHelpers.h"
 
 const FString UBaamDataSubsystem::CharacterTablePath = TEXT("/Game/GameSystem/Data/DT_BaamCharacterRow");
+const FString UBaamDataSubsystem::CardProbabilityTablePath = TEXT("/Game/GameSystem/Data/DT_BaamCardProbability");
 
 void UBaamDataSubsystem::BuildDeck(TArray<FBaamCardInstance>& OutDeck) const
 {
@@ -43,6 +44,12 @@ UBaamDataSubsystem::UBaamDataSubsystem()
 	{
 		CharacterTable = DT_Character.Object;
 	}
+
+	static ConstructorHelpers::FObjectFinder<UDataTable> DT_CardProb(*CardProbabilityTablePath);
+	if (DT_CardProb.Succeeded())
+	{
+		CardProbabilityTable = DT_CardProb.Object;
+	}
 }
 
 const FBaamCharacterRow* UBaamDataSubsystem::GetCharacterRow(FGameplayTag CharacterTag) const
@@ -56,6 +63,27 @@ const FBaamCharacterRow* UBaamDataSubsystem::GetCharacterRow(FGameplayTag Charac
 	return CharacterTable->FindRow<FBaamCharacterRow>(RowName, TEXT("BaamCharacterRow"));
 }
 
+void UBaamDataSubsystem::GetAllCardProbabilities(TArray<FBaamCardProbabilityRow>& OutRows) const
+{
+	OutRows.Reset();
+	if (!CardProbabilityTable)
+	{
+		return;
+	}
+
+	TArray<FBaamCardProbabilityRow*> Rows;
+	CardProbabilityTable->GetAllRows<FBaamCardProbabilityRow>(TEXT("BaamCardProbability"), Rows);
+
+	OutRows.Reserve(Rows.Num());
+	for (const FBaamCardProbabilityRow* Row : Rows)
+	{
+		if (Row)
+		{
+			OutRows.Add(*Row);
+		}
+	}
+}
+	
 void UBaamDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);

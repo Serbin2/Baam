@@ -37,8 +37,6 @@ protected:
 private:
 	void HandlePostLoadMap(UWorld* LoadedWorld);
 
-	// 게임 레벨이면 메뉴를 되살리지 않는다.
-	bool IsGameLevel(const UWorld* World) const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UBaamSessionMenuWidget> Menu;

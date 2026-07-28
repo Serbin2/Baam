@@ -1,59 +1,46 @@
 #include "Game/BaamGameMode.h"
 #include "Game/BaamGameplayTags.h"
 #include "Game/BaamMatchStartComponent.h"
-#include "Player/BaamCharacter.h"
+#include "Game/BaamDataSubsystem.h"
 #include "Game/BaamPlayerState.h"
-#include "Network/Session/BaamLobbyMemberInterface.h"
+#include "Network/BaamNetLog.h"
+#include "Player/BaamCharacter.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
 
 ABaamGameMode::ABaamGameMode()
 {
-	// 로비 Ready 플래그를 들고 다닐 PlayerState.
+	// 좌석/손패 등 플레이어별 데이터의 소유자(md §1.2).
 	PlayerStateClass = ABaamPlayerState::StaticClass();
 
 	// 판 시작 진행은 컴포넌트가 맡는다.
 	MatchStart = CreateDefaultSubobject<UBaamMatchStartComponent>(TEXT("MatchStart"));
 }
 
-void ABaamGameMode::MarkHostIfLocal(APlayerController* PC)
+void ABaamGameMode::PreLogin(const FString& Options, const FString& Address,
+	const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 {
-	// 리슨 서버에서 로컬 컨트롤러 = 방을 연 당사자.
-	if (IBaamLobbyMember* Member = PC ? Cast<IBaamLobbyMember>(PC->PlayerState) : nullptr)
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	if (!ErrorMessage.IsEmpty())
 	{
-		Member->SetIsHost(PC->IsLocalController());
+		return;
+	}
+
+	// 입장 가부 판정은 진행 컴포넌트가 갖는다 — 여기는 엔진 훅을 넘겨주기만 한다.
+	if (MatchStart && !MatchStart->CanAcceptPlayer(ErrorMessage))
+	{
+		UE_LOG(LogBaamNet, Log, TEXT("[MatchStart] 접속 거절(%s) — %s"), *Address, *ErrorMessage);
 	}
 }
 
 void ABaamGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
-	MarkHostIfLocal(NewPlayer);
-}
 
-void ABaamGameMode::HandleSeamlessTravelPlayer(AController*& C)
-{
-	Super::HandleSeamlessTravelPlayer(C);
-
-	// 심리스 트래블은 PostLogin 을 타지 않는다 — 여기서도 챙긴다.
-	APlayerController* PC = Cast<APlayerController>(C);
-	MarkHostIfLocal(PC);
-
+	// 정원이 차면 컴포넌트가 알아서 판을 연다(md §1.4 — 로비에서 대기하다 전환).
 	if (MatchStart)
 	{
-		MatchStart->NotifyPlayerArrived();
-	}
-}
-
-void ABaamGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
-{
-	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
-
-	// 폰이 스폰된 뒤라 여기서 알려야 AssignRoles 가 캐릭터를 찾는다.
-	if (MatchStart)
-	{
-		MatchStart->NotifyPlayerArrived();
+		MatchStart->NotifyPlayerJoined();
 	}
 }
 
@@ -140,6 +127,13 @@ void ABaamGameMode::AssignRoles()
 	for (int32 i = 0; i < Num; ++i)
 	{
 		APlayerController* PC = Players[i];
+
+		// 좌석은 거리 계산·대상 지정의 기준이라 역할과 함께 확정한다.
+		if (ABaamPlayerState* PS = PC ? PC->GetPlayerState<ABaamPlayerState>() : nullptr)
+		{
+			PS->SetSeatIndex(i);
+		}
+
 		ABaamCharacter* Char = PC ? Cast<ABaamCharacter>(PC->GetPawn()) : nullptr;
 		if (!Char)
 		{
@@ -154,5 +148,154 @@ void ABaamGameMode::AssignRoles()
 
 		UE_LOG(LogTemp, Log, TEXT("[Bang] AssignRoles: %s → %s"),
 			*PC->GetName(), *RoleTag.ToString());
+	}
+}
+
+// ======================================================================================
+//  주사위 판정
+// ======================================================================================
+int32 ABaamGameMode::RollDice(int32 Faces)
+{
+	const int32 N = (Faces > 0) ? Faces : DiceFaces;
+	if (N < 2)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] RollDice: 면 수 %d 는 2 미만 — 1 반환."), N);
+		return 1;
+	}
+
+	const int32 Result = FMath::RandRange(1, N); // 1 ~ N 균등
+	UE_LOG(LogTemp, Log, TEXT("[Bang] 주사위 d%d → %d"), N, Result);
+	return Result;
+}
+
+EBaamDiceOutcome ABaamGameMode::ClassifyRoll(int32 Roll, int32 Faces) const
+{
+	const int32 N = (Faces > 0) ? Faces : DiceFaces;
+	if (N < 1)
+	{
+		return EBaamDiceOutcome::Failure;
+	}
+
+	// 비율 정규화 (음수 방지, 합으로 나눔).
+	const float CF = FMath::Max(0.f, CriticalFailureRatio);
+	const float F  = FMath::Max(0.f, FailureRatio);
+	const float S  = FMath::Max(0.f, SuccessRatio);
+	const float CS = FMath::Max(0.f, CriticalSuccessRatio);
+	const float Sum = CF + F + S + CS;
+	if (Sum <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] ClassifyRoll: 비율 합이 0 — 성공으로 처리."));
+		return EBaamDiceOutcome::Success;
+	}
+
+	// 굴린 눈을 (0,1] 로 정규화. 낮을수록 대실패, 높을수록 대성공.
+	const float T = static_cast<float>(FMath::Clamp(Roll, 1, N)) / static_cast<float>(N);
+
+	// 누적 구간 경계.
+	const float C1 = CF / Sum;
+	const float C2 = C1 + F / Sum;
+	const float C3 = C2 + S / Sum;
+
+	if (T <= C1) return EBaamDiceOutcome::CriticalFailure;
+	if (T <= C2) return EBaamDiceOutcome::Failure;
+	if (T <= C3) return EBaamDiceOutcome::Success;
+	return EBaamDiceOutcome::CriticalSuccess;
+}
+
+EBaamDiceOutcome ABaamGameMode::RollForOutcome(int32& OutRoll, int32 Faces)
+{
+	OutRoll = RollDice(Faces);
+	const EBaamDiceOutcome Outcome = ClassifyRoll(OutRoll, Faces);
+
+	const int32 N = (Faces > 0) ? Faces : DiceFaces;
+	UE_LOG(LogTemp, Log, TEXT("[Bang] 판정 — d%d 눈 %d → %s"),
+		N, OutRoll, *GetOutcomeText(Outcome).ToString());
+	return Outcome;
+}
+
+FText ABaamGameMode::GetOutcomeText(EBaamDiceOutcome Outcome)
+{
+	switch (Outcome)
+	{
+	case EBaamDiceOutcome::CriticalFailure: return NSLOCTEXT("Bang", "DiceCritFail",    "대실패");
+	case EBaamDiceOutcome::Failure:         return NSLOCTEXT("Bang", "DiceFail",        "실패");
+	case EBaamDiceOutcome::Success:         return NSLOCTEXT("Bang", "DiceSuccess",     "성공");
+	case EBaamDiceOutcome::CriticalSuccess: return NSLOCTEXT("Bang", "DiceCritSuccess", "대성공");
+	default:                                return FText::GetEmpty();
+	}
+}
+
+// ======================================================================================
+//  확률 기반 카드 분배
+// ======================================================================================
+FGameplayTag ABaamGameMode::DrawWeightedCard() const
+{
+	const UGameInstance* GI = GetGameInstance();
+	const UBaamDataSubsystem* DS = GI ? GI->GetSubsystem<UBaamDataSubsystem>() : nullptr;
+	if (!DS)
+	{
+		return FGameplayTag();
+	}
+
+	TArray<FBaamCardProbabilityRow> Rows;
+	DS->GetAllCardProbabilities(Rows);
+	if (Rows.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] DrawWeightedCard: 카드 확률 데이터 없음(DT 비었거나 미지정)."));
+		return FGameplayTag();
+	}
+
+	// 가중치 합 (음수 방지).
+	float Total = 0.f;
+	for (const FBaamCardProbabilityRow& Row : Rows)
+	{
+		Total += FMath::Max(0.f, Row.Weight);
+	}
+	if (Total <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] DrawWeightedCard: 가중치 합이 0 — 뽑을 카드 없음."));
+		return FGameplayTag();
+	}
+
+	// [0, Total) 난수를 누적 가중치 구간에 대응시켜 선택.
+	const float Pick = FMath::FRandRange(0.f, Total);
+	float Cumulative = 0.f;
+	for (const FBaamCardProbabilityRow& Row : Rows)
+	{
+		Cumulative += FMath::Max(0.f, Row.Weight);
+		if (Pick < Cumulative)
+		{
+			return Row.CardId;
+		}
+	}
+
+	return Rows.Last().CardId; // 부동소수 오차 보정 — 마지막 카드로.
+}
+
+void ABaamGameMode::DealCards(int32 CardsPerPlayer)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	TArray<APlayerController*> Players;
+	CollectPlayers(Players);
+
+	for (APlayerController* PC : Players)
+	{
+		TArray<FString> Dealt;
+		Dealt.Reserve(CardsPerPlayer);
+
+		for (int32 i = 0; i < CardsPerPlayer; ++i)
+		{
+			const FGameplayTag Card = DrawWeightedCard();
+			Dealt.Add(Card.IsValid() ? Card.ToString() : TEXT("(없음)"));
+
+			// TODO(손패 시스템): 여기서 뽑은 Card 를 이 플레이어의 PlayerState.Hand 에 추가.
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("[Bang] 카드 분배 — %s: %s"),
+			PC ? *PC->GetName() : TEXT("null"), *FString::Join(Dealt, TEXT(", ")));
 	}
 }

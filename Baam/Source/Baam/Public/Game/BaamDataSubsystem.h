@@ -30,12 +30,21 @@ public:
 	const FBaamCardRow* GetCardRow(FName CardID) const;
 	const FBaamCardRow* GetCardRow(FGameplayTag CardTag) const;
 
+	// 모든 카드 확률(가중치) Row 를 모아 반환 (확률 기반 분배용).
+	void GetAllCardProbabilities(TArray<FBaamCardProbabilityRow>& OutRows) const;
+
 protected:
 	// DT 경로. 에디터에서 이 경로에 DT_BaamCharacterRow(FBaamCharacterRow) 를 만들어 둔다.
 	static const FString CharacterTablePath;
 
 	UPROPERTY()
 	TObjectPtr<UDataTable> CharacterTable;
+
+	// 카드 확률 DT 경로. 에디터에서 DT_BaamCardProbability(FBaamCardProbabilityRow) 를 만들어 둔다.
+	static const FString CardProbabilityTablePath;
+
+	UPROPERTY()
+	TObjectPtr<UDataTable> CardProbabilityTable;
 	
 	/** DT_BaamCard 의 QuantityOfCard 을 읽어 종류별 매수만큼 카드를 전개. InstanceId 는 1부터. */
 	void BuildDeck(TArray<FBaamCardInstance>& OutDeck) const;

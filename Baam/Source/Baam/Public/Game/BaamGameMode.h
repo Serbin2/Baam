@@ -10,6 +10,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameplayTagContainer.h"
+#include "Game/BaamGameDataTypes.h"   // EBaamDiceOutcome
 #include "BaamGameMode.generated.h"
 
 class UBaamMatchStartComponent;
@@ -38,16 +39,61 @@ public:
 	// 접속한 PlayerController 를 모은다.
 	void CollectPlayers(TArray<APlayerController*>& OutPlayers) const;
 
+	// ── 주사위 판정 ──────────────────────────────────────────────
+	// 주사위 면 수 (기본 24면체). 에디터/코드에서 변경 가능.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "2"))
+	int32 DiceFaces = 24;
+
+	// 주사위를 굴려 1~Faces 결과를 반환한다 (서버에서 호출). Faces<=0 이면 DiceFaces 사용.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
+	int32 RollDice(int32 Faces = 0);
+
+	// ── 판정 비율 (대실패/실패/성공/대성공) ──────────────────────
+	// 각 단계의 "상대 비율". 합이 1 일 필요 없다(내부에서 정규화). 낮은 눈=대실패 … 높은 눈=대성공.
+	// 예) 5 / 45 / 45 / 5 로 두면 극단이 5% 씩. 정수 주사위라 실제 값은 근사치.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
+	float CriticalFailureRatio = 0.1f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
+	float FailureRatio = 0.4f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
+	float SuccessRatio = 0.4f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
+	float CriticalSuccessRatio = 0.1f;
+
+	// 주어진 주사위 눈을 위 비율 구간으로 판정한다. Faces<=0 이면 DiceFaces 사용.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
+	EBaamDiceOutcome ClassifyRoll(int32 Roll, int32 Faces = 0) const;
+
+	// 주사위를 굴려 판정 결과를 반환한다 (굴린 눈은 OutRoll). 로그도 남긴다.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
+	EBaamDiceOutcome RollForOutcome(int32& OutRoll, int32 Faces = 0);
+
+	// ★ 판정 결과 → 화면/로그용 텍스트 ("대실패"/"실패"/"성공"/"대성공"). 출력용.
+	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
+	static FText GetOutcomeText(EBaamDiceOutcome Outcome);
+
+	// ── 확률 기반 카드 분배 ──────────────────────────────────────
+	// 카드 확률(가중치)에 따라 CardId 1장을 뽑는다 (복원추출 — 중복 가능). 실패 시 빈 태그.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Deck")
+	FGameplayTag DrawWeightedCard() const;
+
+	// 접속한 각 플레이어에게 CardsPerPlayer 장씩 확률 기반으로 나눠준다 (서버 권위).
+	// 현재는 결과를 로그로 출력만 한다. 실제 손패 전달은 손패 시스템을 붙일 때.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Deck")
+	void DealCards(int32 CardsPerPlayer = 5);
+
 protected:
-	// 입장 경로가 여러 개라(신규 로그인 / 심리스 트래블) 각각에서 진행 컴포넌트에 알린다.
+	// 판이 시작된 뒤의 접속은 여기서 막는다. 클라의 검색 결과는 캐시라
+	// 시작 직전에 검색한 클라이언트는 bAllowJoinInProgress 검사를 통과해버린다.
+	virtual void PreLogin(const FString& Options, const FString& Address,
+		const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+
 	virtual void PostLogin(APlayerController* NewPlayer) override;
-	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
-	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 
 private:
-	// 서버에서 호스트 플레이어를 표시한다(로비 Ready 집계에서 제외되도록).
-	static void MarkHostIfLocal(APlayerController* PC);
-
 	UPROPERTY(VisibleAnywhere, Category = "Baam")
 	TObjectPtr<UBaamMatchStartComponent> MatchStart;
 };

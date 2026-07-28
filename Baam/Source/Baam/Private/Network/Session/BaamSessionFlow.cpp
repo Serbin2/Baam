@@ -1,20 +1,8 @@
 #include "Network/Session/BaamSessionFlow.h"
 #include "Game/BaamGameInstance.h"
+#include "Game/BaamMatchStartComponent.h"
 #include "Network/BaamNetLog.h"
-#include "Network/Session/BaamLobbyMemberInterface.h"
 #include "Engine/World.h"
-#include "GameFramework/GameStateBase.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
-
-namespace
-{
-	IBaamLobbyMember* GetLocalLobbyMember(const UWorld* World)
-	{
-		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
-		return PC ? Cast<IBaamLobbyMember>(PC->PlayerState) : nullptr;
-	}
-}
 
 void UBaamSessionFlow::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -75,53 +63,6 @@ bool UBaamSessionFlow::IsHost() const
 		return Mode == NM_ListenServer || Mode == NM_Standalone || Mode == NM_DedicatedServer;
 	}
 	return false;
-}
-
-void UBaamSessionFlow::SetLocalReady(bool bReady)
-{
-	if (IBaamLobbyMember* Member = GetLocalLobbyMember(GetWorld()))
-	{
-		Member->RequestSetReady(bReady);
-	}
-	else
-	{
-		UE_LOG(LogBaamNet, Warning, TEXT("[SessionFlow] SetLocalReady: 로비 참가자 없음"));
-	}
-}
-
-bool UBaamSessionFlow::IsLocalReady() const
-{
-	const IBaamLobbyMember* Member = GetLocalLobbyMember(GetWorld());
-	return Member && Member->IsReady();
-}
-
-void UBaamSessionFlow::GetReadyCounts(int32& OutReady, int32& OutGuests) const
-{
-	OutReady = 0;
-	OutGuests = 0;
-
-	const UWorld* World = GetWorld();
-	const AGameStateBase* GS = World ? World->GetGameState() : nullptr;
-	if (!GS)
-	{
-		return;
-	}
-
-	// PlayerArray 는 클라에도 복제된다 — GameMode 를 거치면 클라에서 못 센다.
-	for (APlayerState* Base : GS->PlayerArray)
-	{
-		const IBaamLobbyMember* Member = Cast<IBaamLobbyMember>(Base);
-		if (!Member || Member->IsHost())
-		{
-			continue;
-		}
-
-		++OutGuests;
-		if (Member->IsReady())
-		{
-			++OutReady;
-		}
-	}
 }
 
 FString UBaamSessionFlow::GetRoomCode() const
@@ -269,28 +210,22 @@ void UBaamSessionFlow::StartGame()
 		return;
 	}
 
-	// 호스트를 제외한 전원이 Ready 여야 출발한다. 게스트가 없으면 출발하지 않는다.
-	int32 Ready = 0;
-	int32 Guests = 0;
-	GetReadyCounts(Ready, Guests);
-	if (Guests <= 0 || Ready < Guests)
+	// 맵 이동 없이 제자리에서 시작한다(Prototype-Workflow.md §1.4).
+	// 난입 차단은 StartMatch 안에서 처리된다.
+	UBaamMatchStartComponent* Match = UBaamMatchStartComponent::Find(GetWorld());
+	if (!Match)
 	{
-		SetPhase(EBaamSessionPhase::Failed,
-			FString::Printf(TEXT("Ready 대기 중 (%d/%d)"), Ready, Guests));
+		SetPhase(EBaamSessionPhase::Failed, TEXT("게임모드에 MatchStart 컴포넌트가 없습니다"));
 		return;
 	}
 
-	// 이동 중 새 참가자가 붙으면 트래블 대상에서 누락된다.
-	GI->SetAllowJoinInProgress(false);
-
-	if (!GI->ServerTravelToLevel(GameLevelName))
+	if (!Match->StartMatch())
 	{
-		GI->SetAllowJoinInProgress(true);
-		SetPhase(EBaamSessionPhase::Failed, FString::Printf(TEXT("레벨 '%s' 이동 실패"), *GameLevelName));
+		SetPhase(EBaamSessionPhase::Failed, TEXT("판 시작 실패 — 인원 확인"));
 		return;
 	}
 
-	SetPhase(EBaamSessionPhase::Hosting, FString::Printf(TEXT("게임 시작 — '%s' 로 이동"), *GameLevelName));
+	SetPhase(EBaamSessionPhase::Hosting, TEXT("게임 시작"));
 }
 
 // ── UBaamGameInstance 콜백 ──

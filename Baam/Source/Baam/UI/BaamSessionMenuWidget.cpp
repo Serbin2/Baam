@@ -14,6 +14,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Network/BaamNetLog.h"
@@ -125,13 +126,8 @@ void UBaamSessionMenuWidget::BuildDefaultTree()
 		ListSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 	}
 
-	AddLabel(Box, TEXT("─ 준비 ─"));
-	ReadyText = AddLabel(Box, TEXT("Ready: -"));
-	ReadyButton = AddButton(Box, TEXT("Ready 토글"), TEXT("ReadyButton"));
-	if (ReadyButton)
-	{
-		ReadyButton->OnClicked.AddDynamic(this, &UBaamSessionMenuWidget::HandleReadyClicked);
-	}
+	AddLabel(Box, TEXT("─ 진행 ─"));
+	LobbyText = AddLabel(Box, TEXT("대기 중"));
 
 	StartGameButton = AddButton(Box, TEXT("게임 시작 (호스트)"), TEXT("StartGameButton"));
 	if (StartGameButton)
@@ -214,17 +210,17 @@ void UBaamSessionMenuWidget::NativeConstruct()
 	}
 
 	RefreshHeader();
-	RefreshReadyStatus();
+	RefreshLobbyStatus();
 
-	// PlayerState 복제에는 통지가 없어서 짧은 주기로 훑는다(러프 UI 한정).
+	// 접속 인원은 통지가 없어 짧은 주기로 훑는다(러프 UI 한정).
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(
-			ReadyRefreshTimer, this, &UBaamSessionMenuWidget::RefreshReadyStatus, 0.5f, true);
+			LobbyRefreshTimer, this, &UBaamSessionMenuWidget::RefreshLobbyStatus, 0.5f, true);
 	}
 }
 
-void UBaamSessionMenuWidget::RefreshReadyStatus()
+void UBaamSessionMenuWidget::RefreshLobbyStatus()
 {
 	IBaamSessionInterface* Session = GetSession();
 	if (!Session)
@@ -234,35 +230,18 @@ void UBaamSessionMenuWidget::RefreshReadyStatus()
 
 	const bool bHost = Session->IsHost();
 
-	if (ReadyText)
+	if (LobbyText)
 	{
-		int32 Ready = 0;
-		int32 Guests = 0;
-		Session->GetReadyCounts(Ready, Guests);
-
-		ReadyText->SetText(FText::FromString(bHost
-			? FString::Printf(TEXT("Ready: %d/%d (호스트 — 전원 준비 시 시작 가능)"), Ready, Guests)
-			: FString::Printf(TEXT("Ready: %d/%d — 내 상태: %s"), Ready, Guests,
-				Session->IsLocalReady() ? TEXT("준비됨") : TEXT("대기"))));
+		const AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+		const int32 Num = GS ? GS->PlayerArray.Num() : 0;
+		LobbyText->SetText(FText::FromString(
+			FString::Printf(TEXT("접속 %d명 — 정원이 차면 자동 시작"), Num)));
 	}
 
-	// 호스트에게는 Ready 버튼이, 게스트에게는 시작 버튼이 의미 없다.
-	if (ReadyButton)
-	{
-		ReadyButton->SetVisibility(bHost ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-	}
+	// 수동 시작은 호스트만.
 	if (StartGameButton)
 	{
 		StartGameButton->SetVisibility(bHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-}
-
-void UBaamSessionMenuWidget::HandleReadyClicked()
-{
-	if (IBaamSessionInterface* Session = GetSession())
-	{
-		Session->SetLocalReady(!Session->IsLocalReady());
-		RefreshReadyStatus();
 	}
 }
 
@@ -270,7 +249,7 @@ void UBaamSessionMenuWidget::NativeDestruct()
 {
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().ClearTimer(ReadyRefreshTimer);
+		World->GetTimerManager().ClearTimer(LobbyRefreshTimer);
 	}
 
 	if (IBaamSessionInterface* Session = GetSession())

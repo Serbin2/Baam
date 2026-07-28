@@ -259,55 +259,6 @@ bool UBaamGameInstance::StartListenInPlace()
 	return true;
 }
 
-bool UBaamGameInstance::ServerTravelToLevel(const FString& LevelName)
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: World 없음"));
-		return false;
-	}
-
-	if (LevelName.IsEmpty())
-	{
-		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: 레벨 이름이 비었다"));
-		return false;
-	}
-
-	// 클라이언트는 트래블을 지시할 수 없다 — 서버가 부르면 클라는 자동으로 따라온다.
-	AGameModeBase* GameMode = World->GetAuthGameMode();
-	if (!GameMode)
-	{
-		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: 서버 권위가 아님 — 호스트만 시작할 수 있다"));
-		return false;
-	}
-
-	// 심리스가 아니면 접속이 끊겼다 다시 붙어 세션·PlayerState 가 재생성된다.
-	GameMode->bUseSeamlessTravel = true;
-
-	// 도착지에서 전원 도착을 판정할 기준.
-	PendingTravelPlayerCount = 0;
-	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
-	{
-		if (It->Get())
-		{
-			++PendingTravelPlayerCount;
-		}
-	}
-
-	// ?listen 이 빠지면 이동 후 스탠드얼론이 되어 접속자가 전부 튕긴다.
-	const FString TravelURL = FString::Printf(TEXT("%s?listen"), *LevelName);
-
-	UE_LOG(LogBaamNet, Log, TEXT("ServerTravel: '%s' (출발 인원=%d)"), *TravelURL, PendingTravelPlayerCount);
-
-	if (!World->ServerTravel(TravelURL, /*bAbsolute=*/true))
-	{
-		PendingTravelPlayerCount = 0;
-		return false;
-	}
-	return true;
-}
-
 // ─────────────────────────────────────────────────────────────
 // 검색 / 조인
 // ─────────────────────────────────────────────────────────────

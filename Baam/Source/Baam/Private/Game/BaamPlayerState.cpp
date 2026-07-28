@@ -12,29 +12,13 @@ void ABaamPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(ABaamPlayerState, bIsReady);
-	DOREPLIFETIME(ABaamPlayerState, bIsHost);
+	DOREPLIFETIME(ABaamPlayerState, SeatIndex);
 }
 
-void ABaamPlayerState::Server_SetReady_Implementation(bool bInReady)
+void ABaamPlayerState::SetSeatIndex(int32 InSeat)
 {
-	// 호스트는 Ready 대상이 아니다.
-	if (!bIsHost)
+	if (HasAuthority())
 	{
-		bIsReady = bInReady;
-	}
-}
-
-void ABaamPlayerState::SetIsHost(bool bInIsHost)
-{
-	if (!HasAuthority())
-	{
-		return;
-	}
-
-	bIsHost = bInIsHost;
-	if (bIsHost)
-	{
-		bIsReady = false;
+		SeatIndex = InSeat;
 	}
 }
