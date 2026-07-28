@@ -32,7 +32,9 @@ public:
 
 	// 모든 카드 확률(가중치) Row 를 모아 반환 (확률 기반 분배용).
 	void GetAllCardProbabilities(TArray<FBaamCardProbabilityRow>& OutRows) const;
-	TArray<FBaamCardInstance> GetDeck() const;
+	
+	/** DT_BaamCard 의 QuantityOfCard 을 읽어 종류별 매수만큼 카드를 전개. InstanceId 는 1부터. */
+	void BuildDeck(TArray<FBaamCardInstance>& OutDeck) const;
 
 protected:
 	// DT 경로. 에디터에서 이 경로에 DT_BaamCharacterRow(FBaamCharacterRow) 를 만들어 둔다.
@@ -46,12 +48,6 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UDataTable> CardProbabilityTable;
-	
-	/** DT_BaamCard 의 QuantityOfCard 을 읽어 종류별 매수만큼 카드를 전개. InstanceId 는 1부터. */
-	void BuildDeck(TArray<FBaamCardInstance>& OutDeck) const;
-	
-	UPROPERTY()
-	TArray<FBaamCardInstance> Deck;
 	
 	UPROPERTY()
 	TObjectPtr<UDataTable> CardTable;

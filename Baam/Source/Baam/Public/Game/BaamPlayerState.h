@@ -8,6 +8,8 @@
 #include "GameFramework/PlayerState.h"
 #include "BaamPlayerState.generated.h"
 
+struct FBaamCardInstance;
+
 UCLASS()
 class BAAM_API ABaamPlayerState : public APlayerState
 {
@@ -24,8 +26,36 @@ public:
 
 	// 서버 전용. 판 시작 시 게임모드가 좌석을 매긴다.
 	void SetSeatIndex(int32 InSeat);
+	
+	//	서버 전용. 손패 변경. HandCount 동기화를 한곳에 모으기 위해 Hand 는 이 둘로만 건드린다.
+	void AddCardToHand(const FBaamCardInstance& Card);
+	bool RemoveCardFromHand(int32 InstanceId, FBaamCardInstance& OutRemoved);
+
+	//	⚠️ COND_OwnerOnly 라 "본인 클라"와 "서버"에서만 내용이 차 있다.
+	//	   다른 플레이어의 PlayerState 에서 부르면 클라에서는 항상 빈 배열이어야 정상이다
+	//	   (비어 있지 않다면 은닉 정보가 새고 있는 것).
+	const TArray<FBaamCardInstance>& GetHand() const { return Hand; }
+
+	//	전원에게 복제되는 공개 장수. 남의 손패 크기는 이 값으로만 알 수 있다.
+	UFUNCTION(BlueprintPure, Category = "Baam|Player")
+	int32 GetHandCount() const { return HandCount; }
 
 private:
+	//	소유 클라에 Hand 가 복제되면 호출된다.
+	//	TODO(3.2): 여기서 OnHandChanged 를 브로드캐스트해 손패 UI 를 갱신한다.
+	//	⚠️ 리슨서버 호스트는 OnRep 이 호출되지 않으므로, 그때는 AddCardToHand /
+	//	   RemoveCardFromHand 안에서도 같은 알림을 쏴야 한다.
+	UFUNCTION()
+	void OnRep_Hand();
+
 	UPROPERTY(Replicated)
 	int32 SeatIndex = INDEX_NONE;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Hand)
+	TArray<FBaamCardInstance> Hand;       // COND_OwnerOnly
+	UPROPERTY(Replicated)                   
+	int32 HandCount = 0;                   // 전원 공개
+	UPROPERTY(Replicated)                   
+	TArray<FBaamCardInstance> Equipment;   // 전원 공개 (파란 카드)
+
 };

@@ -90,9 +90,8 @@ public:
 	// 세션 러프 UI 토글(뷰포트에 올리고 마우스 입력을 연다).
 	UFUNCTION(Exec)
 	void Baam_UI();
-	
-	UFUNCTION(Exec)
-	void Baam_DumpDeck();
+
+	//	덱 관련 exec 는 ABaamGameMode 로
 
 private:
 	// 세션 인터페이스 핸들(없으면 유효하지 않은 포인터).

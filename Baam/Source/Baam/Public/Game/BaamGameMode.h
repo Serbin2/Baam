@@ -75,15 +75,37 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
 	static FText GetOutcomeText(EBaamDiceOutcome Outcome);
 
-	// ── 확률 기반 카드 분배 ──────────────────────────────────────
-	// 카드 확률(가중치)에 따라 CardId 1장을 뽑는다 (복원추출 — 중복 가능). 실패 시 빈 태그.
-	UFUNCTION(BlueprintCallable, Category = "Bang|Deck")
+	// ── [현재 미사용] 확률 기반 카드 분배 ────────────────────────
+	//
+	// ⚠️ 이 두 함수는 현재 게임 흐름에서 호출되지 않는다. 실제 카드 분배는
+	//    ABaamGameState::DrawFromDeck + ABaamPlayerState::AddCardToHand 경로를 쓴다.
+	//
+	//    두 방식은 근본적으로 다르다:
+	//      DrawWeightedCard : DT_BaamCardProbability 가중치 기반 **복원추출**.
+	//                         같은 카드가 무한히 나올 수 있고 InstanceId 개념이 없다.
+	//      DrawFromDeck     : 80 장 유한 덱의 **비복원추출**. 카드마다 고유 InstanceId 가 있어
+	//                         손패에서 특정 카드를 지목해 제거할 수 있다.
+	//
+	//    섞어 쓰면 "덱에 없는 카드가 손에 들어오거나 InstanceId 가 중복되는" 버그가 난다.
+	//    참고용으로 남겨두었을 뿐이므로 새 코드에서 호출하지 말 것.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Deck|Deprecated", meta = (DeprecatedFunction,
+		DeprecationMessage = "미사용. 덱 기반 분배는 ABaamGameState::DrawFromDeck 을 사용하세요."))
 	FGameplayTag DrawWeightedCard() const;
 
-	// 접속한 각 플레이어에게 CardsPerPlayer 장씩 확률 기반으로 나눠준다 (서버 권위).
-	// 현재는 결과를 로그로 출력만 한다. 실제 손패 전달은 손패 시스템을 붙일 때.
-	UFUNCTION(BlueprintCallable, Category = "Bang|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Bang|Deck|Deprecated", meta = (DeprecatedFunction,
+		DeprecationMessage = "미사용. 손패 분배는 Baam_DealHand / DrawFromDeck + AddCardToHand 를 사용하세요."))
 	void DealCards(int32 CardsPerPlayer = 5);
+
+	// ── 콘솔 테스트 트리거 (구현: BaamCardExec.cpp) ──────────────
+	UFUNCTION(Exec)
+	void Baam_DumpDeck();
+
+	UFUNCTION(Exec)
+	void Baam_PrintDeck();
+
+	// 접속한 전원에게 덱에서 Count 장씩 나눠준다 (서버 권위). 생략하면 5 장.
+	UFUNCTION(Exec)
+	void Baam_DealHand(int32 Count);
 
 protected:
 	// 판이 시작된 뒤의 접속은 여기서 막는다. 클라의 검색 결과는 캐시라

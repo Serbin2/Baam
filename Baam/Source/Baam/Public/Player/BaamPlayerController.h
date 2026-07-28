@@ -23,6 +23,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bang")
 	void RequestPlayCard(int32 InstanceId, int32 TargetSeat);
 
+	// ── 콘솔 테스트 트리거 (구현: BaamCardExec.cpp) ──────────────
+	//
+	// 손패는 창(=플레이어)마다 다르므로 PlayerController 에 둔다. GameMode 에 두면
+	// 서버 창에서만 호출되어 "각 클라가 자기 손패만 보는지" 를 검증할 수 없다.
+	UFUNCTION(Exec)
+	void Baam_DumpHand();
+
 protected:
 	// 클라 → 서버. 검증 후 카드 사용을 처리한다.
 	UFUNCTION(Server, Reliable, WithValidation)

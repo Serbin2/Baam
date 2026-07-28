@@ -99,11 +99,6 @@ void UBaamDataSubsystem::GetAllCardProbabilities(TArray<FBaamCardProbabilityRow>
 	}
 }
 
-TArray<FBaamCardInstance> UBaamDataSubsystem::GetDeck() const
-{
-	return Deck;
-}
-
 void UBaamDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -121,8 +116,6 @@ void UBaamDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			     "Project Settings > Game > Baam Data > CardTable 을 확인하세요."));
 		return;
 	}
-
-	BuildDeck(Deck);
 }
 
 const FBaamCardRow* UBaamDataSubsystem::GetCardRow(FName CardID) const

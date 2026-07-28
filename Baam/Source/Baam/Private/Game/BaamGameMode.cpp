@@ -7,12 +7,14 @@
 #include "Player/BaamCharacter.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Game/BaamGameState.h"
 
 ABaamGameMode::ABaamGameMode()
 {
 	// 좌석/손패 등 플레이어별 데이터의 소유자(md §1.2).
 	PlayerStateClass = ABaamPlayerState::StaticClass();
-
+	GameStateClass = ABaamGameState::StaticClass();
+	
 	// 판 시작 진행은 컴포넌트가 맡는다.
 	MatchStart = CreateDefaultSubobject<UBaamMatchStartComponent>(TEXT("MatchStart"));
 }
@@ -226,7 +228,11 @@ FText ABaamGameMode::GetOutcomeText(EBaamDiceOutcome Outcome)
 }
 
 // ======================================================================================
-//  확률 기반 카드 분배
+//  [현재 미사용] 확률 기반 카드 분배
+//
+//  실제 분배 경로는 ABaamGameState::DrawFromDeck + ABaamPlayerState::AddCardToHand 다.
+//  아래는 복원추출(가중치) 방식이라 InstanceId 가 없고 같은 카드가 무한히 나올 수 있어
+//  덱 기반 시스템과 섞이면 안 된다. 참고용으로만 남긴다 — 호출처 없음.
 // ======================================================================================
 FGameplayTag ABaamGameMode::DrawWeightedCard() const
 {
