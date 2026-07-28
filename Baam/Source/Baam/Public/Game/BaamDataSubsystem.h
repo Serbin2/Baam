@@ -32,6 +32,7 @@ public:
 
 	// 모든 카드 확률(가중치) Row 를 모아 반환 (확률 기반 분배용).
 	void GetAllCardProbabilities(TArray<FBaamCardProbabilityRow>& OutRows) const;
+	TArray<FBaamCardInstance> GetDeck() const;
 
 protected:
 	// DT 경로. 에디터에서 이 경로에 DT_BaamCharacterRow(FBaamCharacterRow) 를 만들어 둔다.
