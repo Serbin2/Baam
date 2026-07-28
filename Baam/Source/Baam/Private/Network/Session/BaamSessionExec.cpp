@@ -1,6 +1,8 @@
-#include "Network/Session/BaamGameInstance.h"
+#include "Game/BaamGameInstance.h"
 #include "Network/Session/BaamSessionFlow.h"
 #include "Network/BaamNetLog.h"
+#include "UI/BaamSessionMenuController.h"
+#include "GameFramework/PlayerController.h"
 
 #if !UE_BUILD_SHIPPING
 namespace
@@ -72,9 +74,30 @@ void UBaamGameInstance::Baam_Leave()
 #endif
 }
 
+void UBaamGameInstance::Baam_Start()
+{
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogBaamNet, Log, TEXT("[Exec] Baam_Start"));
+	if (IBaamSessionInterface* Session = GetSession(this))
+	{
+		Session->StartGame();
+	}
+#endif
+}
+
 void UBaamGameInstance::Baam_RoomCode()
 {
 #if !UE_BUILD_SHIPPING
 	UE_LOG(LogBaamNet, Log, TEXT("[Exec] Baam_RoomCode = '%s'"), *GetHostRoomCode());
+#endif
+}
+
+void UBaamGameInstance::Baam_UI()
+{
+#if !UE_BUILD_SHIPPING
+	if (UBaamSessionMenuController* Menu = GetSubsystem<UBaamSessionMenuController>())
+	{
+		Menu->Toggle();
+	}
 #endif
 }

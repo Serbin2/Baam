@@ -1,7 +1,20 @@
 #include "Network/Session/BaamSessionFlow.h"
-#include "Network/Session/BaamGameInstance.h"
+#include "Game/BaamGameInstance.h"
 #include "Network/BaamNetLog.h"
+#include "Network/Session/BaamLobbyMemberInterface.h"
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+
+namespace
+{
+	IBaamLobbyMember* GetLocalLobbyMember(const UWorld* World)
+	{
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		return PC ? Cast<IBaamLobbyMember>(PC->PlayerState) : nullptr;
+	}
+}
 
 void UBaamSessionFlow::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -62,6 +75,53 @@ bool UBaamSessionFlow::IsHost() const
 		return Mode == NM_ListenServer || Mode == NM_Standalone || Mode == NM_DedicatedServer;
 	}
 	return false;
+}
+
+void UBaamSessionFlow::SetLocalReady(bool bReady)
+{
+	if (IBaamLobbyMember* Member = GetLocalLobbyMember(GetWorld()))
+	{
+		Member->RequestSetReady(bReady);
+	}
+	else
+	{
+		UE_LOG(LogBaamNet, Warning, TEXT("[SessionFlow] SetLocalReady: 로비 참가자 없음"));
+	}
+}
+
+bool UBaamSessionFlow::IsLocalReady() const
+{
+	const IBaamLobbyMember* Member = GetLocalLobbyMember(GetWorld());
+	return Member && Member->IsReady();
+}
+
+void UBaamSessionFlow::GetReadyCounts(int32& OutReady, int32& OutGuests) const
+{
+	OutReady = 0;
+	OutGuests = 0;
+
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GS = World ? World->GetGameState() : nullptr;
+	if (!GS)
+	{
+		return;
+	}
+
+	// PlayerArray 는 클라에도 복제된다 — GameMode 를 거치면 클라에서 못 센다.
+	for (APlayerState* Base : GS->PlayerArray)
+	{
+		const IBaamLobbyMember* Member = Cast<IBaamLobbyMember>(Base);
+		if (!Member || Member->IsHost())
+		{
+			continue;
+		}
+
+		++OutGuests;
+		if (Member->IsReady())
+		{
+			++OutReady;
+		}
+	}
 }
 
 FString UBaamSessionFlow::GetRoomCode() const
@@ -192,6 +252,45 @@ void UBaamSessionFlow::LeaveSession()
 	}
 	// 맵 이동이 없으므로 타이틀 복귀 트래블도 없다 — 파기 후 그대로 Phase.Lobby 로 되돌아간다.
 	SetPhase(EBaamSessionPhase::Idle, TEXT("세션 종료"));
+}
+
+void UBaamSessionFlow::StartGame()
+{
+	UBaamGameInstance* GI = GetBaamGameInstance();
+	if (!GI)
+	{
+		SetPhase(EBaamSessionPhase::Failed, TEXT("GameInstance 가 UBaamGameInstance 가 아님"));
+		return;
+	}
+
+	if (!IsHost())
+	{
+		SetPhase(EBaamSessionPhase::Failed, TEXT("호스트만 게임을 시작할 수 있습니다"));
+		return;
+	}
+
+	// 호스트를 제외한 전원이 Ready 여야 출발한다. 게스트가 없으면 출발하지 않는다.
+	int32 Ready = 0;
+	int32 Guests = 0;
+	GetReadyCounts(Ready, Guests);
+	if (Guests <= 0 || Ready < Guests)
+	{
+		SetPhase(EBaamSessionPhase::Failed,
+			FString::Printf(TEXT("Ready 대기 중 (%d/%d)"), Ready, Guests));
+		return;
+	}
+
+	// 이동 중 새 참가자가 붙으면 트래블 대상에서 누락된다.
+	GI->SetAllowJoinInProgress(false);
+
+	if (!GI->ServerTravelToLevel(GameLevelName))
+	{
+		GI->SetAllowJoinInProgress(true);
+		SetPhase(EBaamSessionPhase::Failed, FString::Printf(TEXT("레벨 '%s' 이동 실패"), *GameLevelName));
+		return;
+	}
+
+	SetPhase(EBaamSessionPhase::Hosting, FString::Printf(TEXT("게임 시작 — '%s' 로 이동"), *GameLevelName));
 }
 
 // ── UBaamGameInstance 콜백 ──
