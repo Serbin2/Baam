@@ -36,11 +36,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
 	virtual void LeaveSession() override;
 
+	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
+	virtual void SetLocalReady(bool bReady) override;
+
+	virtual void StartGame() override;
+
 	UFUNCTION(BlueprintPure, Category = "Baam|Session")
 	virtual bool IsHost() const override;
 
 	UFUNCTION(BlueprintPure, Category = "Baam|Session")
 	virtual FString GetRoomCode() const override;
+
+	virtual bool IsLocalReady() const override;
+
+	// StartGame 이 이동할 게임 레벨 이름. 로비 전용 UI 를 게임 레벨에서 접기 위해 조회한다.
+	FString GetGameLevelName() const { return GameLevelName; }
+
+	virtual void GetReadyCounts(int32& OutReady, int32& OutGuests) const override;
 
 	virtual FOnBaamSessionPhaseChanged& GetSessionPhaseChangedEvent() override { return OnSessionPhaseChanged; }
 	virtual FOnBaamSessionListReady& GetSessionListReadyEvent() override { return OnSessionListReady; }
@@ -57,6 +69,10 @@ protected:
 	// 실제 클램프는 GameInstance 에서 ABaamGameMode::Min/MaxPlayers 로 한 번 더.
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Baam|Session")
 	int32 MaxPlayers = 7;
+
+	// StartGame 이 이동할 게임 레벨. 경로 없이 이름만 쓰면 엔진이 프로젝트에서 찾는다.
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Baam|Session")
+	FString GameLevelName = TEXT("L_Game");
 
 private:
 	UBaamGameInstance* GetBaamGameInstance() const;

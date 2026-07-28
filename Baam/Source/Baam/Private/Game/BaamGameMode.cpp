@@ -1,8 +1,61 @@
 #include "Game/BaamGameMode.h"
 #include "Game/BaamGameplayTags.h"
+#include "Game/BaamMatchStartComponent.h"
 #include "Player/BaamCharacter.h"
+#include "Game/BaamPlayerState.h"
+#include "Network/Session/BaamLobbyMemberInterface.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
+
+ABaamGameMode::ABaamGameMode()
+{
+	// 로비 Ready 플래그를 들고 다닐 PlayerState.
+	PlayerStateClass = ABaamPlayerState::StaticClass();
+
+	// 판 시작 진행은 컴포넌트가 맡는다.
+	MatchStart = CreateDefaultSubobject<UBaamMatchStartComponent>(TEXT("MatchStart"));
+}
+
+void ABaamGameMode::MarkHostIfLocal(APlayerController* PC)
+{
+	// 리슨 서버에서 로컬 컨트롤러 = 방을 연 당사자.
+	if (IBaamLobbyMember* Member = PC ? Cast<IBaamLobbyMember>(PC->PlayerState) : nullptr)
+	{
+		Member->SetIsHost(PC->IsLocalController());
+	}
+}
+
+void ABaamGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	MarkHostIfLocal(NewPlayer);
+}
+
+void ABaamGameMode::HandleSeamlessTravelPlayer(AController*& C)
+{
+	Super::HandleSeamlessTravelPlayer(C);
+
+	// 심리스 트래블은 PostLogin 을 타지 않는다 — 여기서도 챙긴다.
+	APlayerController* PC = Cast<APlayerController>(C);
+	MarkHostIfLocal(PC);
+
+	if (MatchStart)
+	{
+		MatchStart->NotifyPlayerArrived();
+	}
+}
+
+void ABaamGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+
+	// 폰이 스폰된 뒤라 여기서 알려야 AssignRoles 가 캐릭터를 찾는다.
+	if (MatchStart)
+	{
+		MatchStart->NotifyPlayerArrived();
+	}
+}
 
 TArray<FGameplayTag> ABaamGameMode::BuildRolePool(int32 NumPlayers)
 {

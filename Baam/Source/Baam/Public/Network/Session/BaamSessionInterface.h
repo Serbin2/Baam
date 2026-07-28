@@ -35,12 +35,26 @@ public:
 	// 세션 파기(호스트/클라 공통).
 	virtual void LeaveSession() = 0;
 
+	// 게스트 전용. 로컬 플레이어의 Ready 를 서버에 올린다(호스트가 부르면 무시된다).
+	virtual void SetLocalReady(bool bReady) = 0;
+
+	// 호스트 전용. 접속한 전원을 게임 레벨로 함께 이동시킨다(심리스 ServerTravel).
+	// 호스트를 제외한 전원이 Ready 여야 출발한다 — 아니면 Failed 단계로 떨어진다.
+	// 이동 후에도 리슨을 유지하므로 세션과 방 코드는 그대로 살아 있다.
+	virtual void StartGame() = 0;
+
 	// ── 조회 ──
 	// 이 인스턴스가 서버 권위인가.
 	virtual bool IsHost() const = 0;
 
 	// 현재 방 코드. 호스트가 아니면 빈 문자열.
 	virtual FString GetRoomCode() const = 0;
+
+	// 로컬 플레이어의 Ready 상태.
+	virtual bool IsLocalReady() const = 0;
+
+	// 호스트 제외 Ready 인원 / 게스트 총원. 로비 표시용(서버·클라 공통).
+	virtual void GetReadyCounts(int32& OutReady, int32& OutGuests) const = 0;
 
 	// ── 통지 ──
 	// 단계 변화(Creating/Hosting/Searching/Joining/Joined/Failed). UI 가 여기에 바인딩한다.

@@ -1,5 +1,6 @@
-#include "Network/Session/BaamGameInstance.h"
+#include "Game/BaamGameInstance.h"
 #include "Network/Session/BaamOssPolicy.h"
+#include "Network/Session/BaamSessionFlow.h"
 #include "Network/BaamNetLog.h"
 #include "Game/BaamGameMode.h"
 #include "AbilitySystemGlobals.h"
@@ -63,6 +64,7 @@ void UBaamGameInstance::Init()
 	{
 		NetworkFailureHandle = GEngine->OnNetworkFailure().AddUObject(this, &UBaamGameInstance::HandleNetworkFailure);
 	}
+
 }
 
 void UBaamGameInstance::Shutdown()
@@ -120,6 +122,8 @@ void UBaamGameInstance::HostSession(int32 MaxPlayers, bool bLAN, const FString& 
 		UE_LOG(LogBaamNet, Log, TEXT("HostSession: 기존 세션(상태=%s) 파기 완료 후 생성 예약"),
 			EOnlineSessionState::ToString(SessionState));
 
+		// 생성/조인 예약은 동시에 살아 있으면 안 된다.
+		PendingJoinRequest = FPendingJoinRequest();
 		PendingHostRequest.RoomName = RoomName;
 		PendingHostRequest.MaxPlayers = MaxPlayers;
 		PendingHostRequest.bLAN = bLAN;
@@ -255,6 +259,55 @@ bool UBaamGameInstance::StartListenInPlace()
 	return true;
 }
 
+bool UBaamGameInstance::ServerTravelToLevel(const FString& LevelName)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: World 없음"));
+		return false;
+	}
+
+	if (LevelName.IsEmpty())
+	{
+		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: 레벨 이름이 비었다"));
+		return false;
+	}
+
+	// 클라이언트는 트래블을 지시할 수 없다 — 서버가 부르면 클라는 자동으로 따라온다.
+	AGameModeBase* GameMode = World->GetAuthGameMode();
+	if (!GameMode)
+	{
+		UE_LOG(LogBaamNet, Warning, TEXT("ServerTravel: 서버 권위가 아님 — 호스트만 시작할 수 있다"));
+		return false;
+	}
+
+	// 심리스가 아니면 접속이 끊겼다 다시 붙어 세션·PlayerState 가 재생성된다.
+	GameMode->bUseSeamlessTravel = true;
+
+	// 도착지에서 전원 도착을 판정할 기준.
+	PendingTravelPlayerCount = 0;
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (It->Get())
+		{
+			++PendingTravelPlayerCount;
+		}
+	}
+
+	// ?listen 이 빠지면 이동 후 스탠드얼론이 되어 접속자가 전부 튕긴다.
+	const FString TravelURL = FString::Printf(TEXT("%s?listen"), *LevelName);
+
+	UE_LOG(LogBaamNet, Log, TEXT("ServerTravel: '%s' (출발 인원=%d)"), *TravelURL, PendingTravelPlayerCount);
+
+	if (!World->ServerTravel(TravelURL, /*bAbsolute=*/true))
+	{
+		PendingTravelPlayerCount = 0;
+		return false;
+	}
+	return true;
+}
+
 // ─────────────────────────────────────────────────────────────
 // 검색 / 조인
 // ─────────────────────────────────────────────────────────────
@@ -328,12 +381,45 @@ void UBaamGameInstance::JoinFoundSession(int32 SearchResultIndex)
 		return;
 	}
 
+	// 생성과 같은 제약 — 로컬에 세션이 남아 있으면 JoinSession 이 실패한다.
+	// 재접속(강제 종료 후 다시 참여)에서 그대로 걸린다.
+	const EOnlineSessionState::Type SessionState = Sessions->GetSessionState(NAME_GameSession);
+	if (SessionState != EOnlineSessionState::NoSession)
+	{
+		UE_LOG(LogBaamNet, Log, TEXT("JoinFoundSession: 기존 세션(상태=%s) 파기 완료 후 조인 예약"),
+			EOnlineSessionState::ToString(SessionState));
+
+		// 생성/조인 예약은 동시에 살아 있으면 안 된다.
+		PendingHostRequest = FPendingHostRequest();
+		PendingJoinRequest.Result = Result;
+		PendingJoinRequest.bValid = true;
+
+		if (SessionState != EOnlineSessionState::Destroying)
+		{
+			DestroyCurrentSession();
+		}
+		return;
+	}
+
+	StartJoinSession(Result);
+}
+
+void UBaamGameInstance::StartJoinSession(const FOnlineSessionSearchResult& Result)
+{
+	IOnlineSessionPtr Sessions = GetSessionInterface();
+	if (!Sessions.IsValid())
+	{
+		UE_LOG(LogBaamNet, Warning, TEXT("StartJoinSession: SessionInterface 없음"));
+		OnJoinSessionComplete.Broadcast(false);
+		return;
+	}
+
 	JoinSessionCompleteHandle = Sessions->AddOnJoinSessionCompleteDelegate_Handle(
 		FOnJoinSessionCompleteDelegate::CreateUObject(this, &UBaamGameInstance::HandleJoinSessionComplete));
 
 	if (!Sessions->JoinSession(0, NAME_GameSession, Result))
 	{
-		UE_LOG(LogBaamNet, Warning, TEXT("JoinFoundSession: JoinSession 호출 실패"));
+		UE_LOG(LogBaamNet, Warning, TEXT("StartJoinSession: JoinSession 호출 실패"));
 		Sessions->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteHandle);
 		OnJoinSessionComplete.Broadcast(false);
 	}
@@ -409,6 +495,16 @@ void UBaamGameInstance::HandleDestroySessionComplete(FName SessionName, bool bWa
 		PendingHostRequest = FPendingHostRequest();
 		UE_LOG(LogBaamNet, Log, TEXT("세션 파기 완료 — 예약된 방 생성 재개"));
 		StartHostSession(Request.MaxPlayers, Request.bLAN, Request.RoomName);
+		return;
+	}
+
+	// 파기를 기다리던 조인 요청(재접속 경로).
+	if (PendingJoinRequest.bValid)
+	{
+		const FOnlineSessionSearchResult Result = PendingJoinRequest.Result;
+		PendingJoinRequest = FPendingJoinRequest();
+		UE_LOG(LogBaamNet, Log, TEXT("세션 파기 완료 — 예약된 조인 재개"));
+		StartJoinSession(Result);
 	}
 }
 

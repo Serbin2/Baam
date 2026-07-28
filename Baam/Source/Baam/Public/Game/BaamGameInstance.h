@@ -12,7 +12,7 @@
 
 class UNetDriver;
 
-UCLASS()
+UCLASS(Config = Game)
 class BAAM_API UBaamGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
@@ -44,6 +44,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
 	void SetAllowJoinInProgress(bool bAllow);
 
+	// 서버 권위일 때만 동작. 접속 전원을 LevelName 으로 함께 이동시킨다.
+	// ?listen 을 유지해야 이동 후에도 리슨 서버로 남아 세션이 끊기지 않는다.
+	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
+	bool ServerTravelToLevel(const FString& LevelName);
+
 	// ── 조회 ──
 
 	// 호스트가 광고 중인 방 코드. 호스트가 아니면 빈 문자열.
@@ -60,6 +65,13 @@ public:
 	// 직전 검색 결과 전체 스냅샷(필터 미적용, ResultIndex=검색 캐시 인덱스).
 	UFUNCTION(BlueprintPure, Category = "Baam|Session")
 	TArray<FBaamSessionSearchResult> GetFoundSessionResults() const;
+
+	// ServerTravelToLevel 이 출발시킨 인원. 트래블로 들어온 게 아니면 0.
+	UFUNCTION(BlueprintPure, Category = "Baam|Session")
+	int32 GetPendingTravelPlayerCount() const { return PendingTravelPlayerCount; }
+
+	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
+	void ClearPendingTravelPlayerCount() { PendingTravelPlayerCount = 0; }
 
 	// ── 결과 이벤트 (UBaamSessionFlow 가 구독) ──
 	UPROPERTY(BlueprintAssignable, Category = "Baam|Session")
@@ -84,7 +96,12 @@ public:
 	UFUNCTION(Exec)
 	void Baam_Leave();
 	UFUNCTION(Exec)
+	void Baam_Start();
+	UFUNCTION(Exec)
 	void Baam_RoomCode();
+	// 세션 러프 UI 토글(뷰포트에 올리고 마우스 입력을 연다).
+	UFUNCTION(Exec)
+	void Baam_UI();
 
 private:
 	// 세션 인터페이스 핸들(없으면 유효하지 않은 포인터).
@@ -92,6 +109,9 @@ private:
 
 	// 호스트가 이번 세션에 광고한 방 코드(6자 A-Z2-9). 호스트 전용.
 	FString HostRoomCode;
+
+	// ServerTravel 출발 시점의 접속 인원(GameInstance 는 트래블을 넘어 살아남는다).
+	int32 PendingTravelPlayerCount = 0;
 
 	// 6자 방 코드 생성(혼동 문자 0/O/1/I 제외).
 	static FString GenerateRoomCode();
@@ -109,8 +129,19 @@ private:
 	};
 	FPendingHostRequest PendingHostRequest;
 
+	// 파기 완료를 기다리는 조인 요청. 결과는 값으로 — 재검색하면 SessionSearch 가 갈린다.
+	struct FPendingJoinRequest
+	{
+		FOnlineSessionSearchResult Result;
+		bool bValid = false;
+	};
+	FPendingJoinRequest PendingJoinRequest;
+
 	// 실제 CreateSession 실행부 — 기존 세션이 없는 상태에서만 호출된다.
 	void StartHostSession(int32 MaxPlayers, bool bLAN, const FString& RoomName);
+
+	// 실제 JoinSession 실행부 — 기존 세션이 없는 상태에서만 호출된다.
+	void StartJoinSession(const FOnlineSessionSearchResult& Result);
 
 	// 맵을 다시 로드하지 않고 현재 월드를 리슨 서버로 전환한다.
 	bool StartListenInPlace();
