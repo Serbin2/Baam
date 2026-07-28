@@ -15,16 +15,17 @@ public class Baam : ModuleRules
 			"GameplayAbilities",   // UGameplayAbility / UGameplayEffect / UAttributeSet
 			"GameplayTags",        // NativeGameplayTags (UE_DEFINE_GAMEPLAY_TAG)
 			"GameplayTasks",        // UAbilityTask (응답 창 WaitForResolution 등)
-			"UMG"
+			"UMG",
+			// --- 세션(방코드 온라인, M6) ---
+			"OnlineSubsystem"      // IOnlineSessionPtr / FOnlineSessionSettings 를 헤더에서 사용
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"Slate", "SlateCore",
+			"OnlineSubsystemUtils"  // Online::GetSubsystem 헬퍼 (.cpp 전용)
+		});
 
 		PublicIncludePaths.Add(ModuleDirectory);
-		
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }
