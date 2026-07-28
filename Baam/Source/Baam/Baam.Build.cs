@@ -17,7 +17,8 @@ public class Baam : ModuleRules
 			"GameplayTasks",        // UAbilityTask (응답 창 WaitForResolution 등)
 			"UMG",
 			// --- 세션(방코드 온라인, M6) ---
-			"OnlineSubsystem"      // IOnlineSessionPtr / FOnlineSessionSettings 를 헤더에서 사용
+			"OnlineSubsystem",      // IOnlineSessionPtr / FOnlineSessionSettings 를 헤더에서 사용
+			"DeveloperSettings"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

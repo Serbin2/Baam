@@ -44,3 +44,48 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<UGameplayAbility>> GrantedAbilities;
 };
+
+USTRUCT(BlueprintType)
+struct FBaamCardRow : public FTableRowBase
+{
+	GENERATED_BODY()
+public:
+	//	카드 종류 ( Card.Id.* )
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FGameplayTag CardIdTag;
+	
+	//	카드 이름
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FText DisplayName;
+	//	카드 설명
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FText Description;
+	
+	//	카드 타입 ( Card.Type.* )
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FGameplayTag TypeTag;
+	
+	//	카드 특성 ( Card.Trait.* )
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FGameplayTagContainer TraitTags;
+
+	// 갈색 카드: 사용 시 이 이벤트 태그로 GA 를 트리거한다 (Ability.Bang 등).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	FGameplayTag AbilityEventTag;
+
+	// 파란 카드: 장착 시 적용할 Infinite GE.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	TSubclassOf<UGameplayEffect> EquipEffect;
+
+	// GA/GE 가 읽는 수치. 역마차 2 / 웰스파고 3 / 무기 사거리 / 피해량 등.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	int32 Magnitude = 0;
+	
+	//	덱에 들어갈 카드 매수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0"))
+	int32 QuantityOfCard = 0;
+	
+	//	확률을 사용하는 카드의 경우, 성공 판정을 받기 위해 필요한 성공값 수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0"))
+	int32 CheckChance = 0;
+};
