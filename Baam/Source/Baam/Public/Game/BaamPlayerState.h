@@ -10,6 +10,9 @@
 
 struct FBaamCardInstance;
 
+/** 손패 내용이 바뀌었다. UI 는 여기에 구독해 갱신한다. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBaamHandChanged);
+
 UCLASS()
 class BAAM_API ABaamPlayerState : public APlayerState
 {
@@ -17,6 +20,16 @@ class BAAM_API ABaamPlayerState : public APlayerState
 
 public:
 	ABaamPlayerState();
+
+	/**
+	 * 손패 변경 알림.
+	 *
+	 * ⚠️ 리슨서버 호스트는 자기 PlayerState 에 OnRep 이 호출되지 않는다(서버는 복제를 받지 않으므로).
+	 *    그래서 AddCardToHand / RemoveCardFromHand 안에서도 같이 브로드캐스트한다.
+	 *    이걸 놓치면 "클라는 손패가 보이는데 호스트만 안 보인다" 가 된다.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Baam|Player")
+	FOnBaamHandChanged OnHandChanged;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
