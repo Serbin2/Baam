@@ -2,11 +2,9 @@
 
 #include "UI/BaamSessionMenuWidget.h"
 #include "Network/BaamNetLog.h"
-#include "Network/Session/BaamSessionFlow.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "Misc/PackageName.h"
 #include "TimerManager.h"
 
 void UBaamSessionMenuController::Initialize(FSubsystemCollectionBase& Collection)
@@ -79,33 +77,13 @@ void UBaamSessionMenuController::Close()
 	UE_LOG(LogBaamNet, Log, TEXT("[SessionMenu] 닫음"));
 }
 
-bool UBaamSessionMenuController::IsGameLevel(const UWorld* World) const
-{
-	const UBaamSessionFlow* Flow = GetGameInstance() ? GetGameInstance()->GetSubsystem<UBaamSessionFlow>() : nullptr;
-	if (!Flow || !World)
-	{
-		return false;
-	}
-
-	const FString GameLevel = FPackageName::GetShortName(Flow->GetGameLevelName());
-	const FString Loaded = FPackageName::GetShortName(World->GetOutermost()->GetName());
-	return !GameLevel.IsEmpty() && Loaded.Equals(GameLevel, ESearchCase::IgnoreCase);
-}
-
 void UBaamSessionMenuController::HandlePostLoadMap(UWorld* LoadedWorld)
 {
-	// 이전 월드와 함께 파괴됐다.
+	// 조인은 ClientTravel 이라 월드가 갈리고 위젯도 함께 파괴된다.
 	Menu = nullptr;
 
 	if (!bOpen || !LoadedWorld)
 	{
-		return;
-	}
-
-	if (IsGameLevel(LoadedWorld))
-	{
-		bOpen = false;
-		UE_LOG(LogBaamNet, Log, TEXT("[SessionMenu] 게임 레벨 진입 — 복구하지 않음"));
 		return;
 	}
 

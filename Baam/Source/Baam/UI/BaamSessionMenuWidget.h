@@ -60,11 +60,8 @@ private:
 
 	void RefreshHeader();
 
-	// Ready 는 PlayerState 복제라 별도 통지가 없다 — 로비에서만 짧은 주기로 갱신한다.
-	void RefreshReadyStatus();
-
-	UFUNCTION()
-	void HandleReadyClicked();
+	// 접속 인원 표시는 통지가 없어 짧은 주기로 갱신한다.
+	void RefreshLobbyStatus();
 
 	UFUNCTION()
 	void HandleHostClicked();
@@ -98,15 +95,12 @@ private:
 	TObjectPtr<UScrollBox> ResultList;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UTextBlock> ReadyText;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UButton> ReadyButton;
+	TObjectPtr<UTextBlock> LobbyText;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UButton> StartGameButton;
 
-	FTimerHandle ReadyRefreshTimer;
+	FTimerHandle LobbyRefreshTimer;
 
 	// 목록 행 핸들러 — 목록을 다시 만들 때까지 살아 있어야 클릭이 동작한다.
 	UPROPERTY(Transient)

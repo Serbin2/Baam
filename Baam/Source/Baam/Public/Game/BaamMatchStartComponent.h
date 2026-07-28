@@ -1,5 +1,5 @@
-// BANG! 판 시작 진행 — 서버 권위. 트래블 인원이 다 도착하면 게임모드에 역할 배정을 시킨다.
-// 도착 인원은 UBaamGameInstance 가 출발 시점에 기록해 둔 수와 비교한다.
+// BANG! 판 시작 진행 — 서버 권위. 맵 이동 없이 제자리에서 판을 연다(Prototype-Workflow.md §1.4).
+// 세션 계층이 StartMatch 를 부르고, 이 컴포넌트가 게임모드에 역할 배정을 시킨다.
 
 #pragma once
 
@@ -9,7 +9,7 @@
 
 class ABaamGameMode;
 
-UCLASS(ClassGroup = (Baam), meta = (BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (Baam), Config = Game, meta = (BlueprintSpawnableComponent))
 class BAAM_API UBaamMatchStartComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -17,28 +17,27 @@ class BAAM_API UBaamMatchStartComponent : public UActorComponent
 public:
 	UBaamMatchStartComponent();
 
-	// 게임모드의 입장 훅에서 불린다(신규 로그인 / 심리스 트래블 / 폰 스폰 직후).
-	void NotifyPlayerArrived();
+	// 현재 월드의 게임모드에 붙은 컴포넌트. 서버가 아니면 nullptr.
+	static UBaamMatchStartComponent* Find(const UWorld* World);
+
+	// 게임모드의 PostLogin 에서 불린다. 정원이 차면 그대로 판을 연다.
+	void NotifyPlayerJoined();
+
+	// 서버 전용. 역할을 배정하고 판을 연다. 이미 시작했거나 인원이 안 맞으면 false.
+	UFUNCTION(BlueprintCallable, Category = "Baam|Match")
+	bool StartMatch();
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Match")
+	bool IsMatchStarted() const { return bMatchStarted; }
 
 protected:
-	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	// 이 인원이 모이면 자동으로 시작한다. 4~7 로 클램프된다.
+	// DefaultGame.ini [/Script/Baam.BaamMatchStartComponent] 로 덮어쓴다.
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Baam|Match")
+	int32 AutoStartPlayers = 4;
 
 private:
 	ABaamGameMode* GetGameMode() const;
 
-	// 전원 도착이면 역할 배정을 1회 실행한다.
-	void TryStartMatch();
-
-	// 훅이 안 불리는 경로를 위한 보조 감시(성공 또는 시간 초과 시 중단).
-	void StartArrivalWatch();
-
 	bool bMatchStarted = false;
-
-	FTimerHandle ArrivalTimer;
-	int32 ArrivalAttempts = 0;
-
-	// 0.5초 간격 x 20회 = 10초.
-	static constexpr float ArrivalPollInterval = 0.5f;
-	static constexpr int32 ArrivalMaxAttempts = 20;
 };

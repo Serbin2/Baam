@@ -86,15 +86,9 @@ public:
 	void DealCards(int32 CardsPerPlayer = 5);
 
 protected:
-	// 입장 경로가 여러 개라(신규 로그인 / 심리스 트래블) 각각에서 진행 컴포넌트에 알린다.
 	virtual void PostLogin(APlayerController* NewPlayer) override;
-	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
-	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 
 private:
-	// 서버에서 호스트 플레이어를 표시한다(로비 Ready 집계에서 제외되도록).
-	static void MarkHostIfLocal(APlayerController* PC);
-
 	UPROPERTY(VisibleAnywhere, Category = "Baam")
 	TObjectPtr<UBaamMatchStartComponent> MatchStart;
 };
