@@ -86,6 +86,11 @@ public:
 	void DealCards(int32 CardsPerPlayer = 5);
 
 protected:
+	// 판이 시작된 뒤의 접속은 여기서 막는다. 클라의 검색 결과는 캐시라
+	// 시작 직전에 검색한 클라이언트는 bAllowJoinInProgress 검사를 통과해버린다.
+	virtual void PreLogin(const FString& Options, const FString& Address,
+		const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 
 private:

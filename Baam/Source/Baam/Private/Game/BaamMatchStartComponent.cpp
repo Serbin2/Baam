@@ -46,6 +46,16 @@ ABaamGameMode* UBaamMatchStartComponent::GetGameMode() const
 	return Cast<ABaamGameMode>(GetOwner());
 }
 
+bool UBaamMatchStartComponent::CanAcceptPlayer(FString& OutError) const
+{
+	if (bMatchStarted)
+	{
+		OutError = TEXT("판이 이미 시작되었습니다");
+		return false;
+	}
+	return true;
+}
+
 bool UBaamMatchStartComponent::StartMatch()
 {
 	ABaamGameMode* GM = GetGameMode();

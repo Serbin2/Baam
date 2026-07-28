@@ -3,6 +3,7 @@
 #include "Game/BaamMatchStartComponent.h"
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamPlayerState.h"
+#include "Network/BaamNetLog.h"
 #include "Player/BaamCharacter.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -14,6 +15,22 @@ ABaamGameMode::ABaamGameMode()
 
 	// 판 시작 진행은 컴포넌트가 맡는다.
 	MatchStart = CreateDefaultSubobject<UBaamMatchStartComponent>(TEXT("MatchStart"));
+}
+
+void ABaamGameMode::PreLogin(const FString& Options, const FString& Address,
+	const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	if (!ErrorMessage.IsEmpty())
+	{
+		return;
+	}
+
+	// 입장 가부 판정은 진행 컴포넌트가 갖는다 — 여기는 엔진 훅을 넘겨주기만 한다.
+	if (MatchStart && !MatchStart->CanAcceptPlayer(ErrorMessage))
+	{
+		UE_LOG(LogBaamNet, Log, TEXT("[MatchStart] 접속 거절(%s) — %s"), *Address, *ErrorMessage);
+	}
 }
 
 void ABaamGameMode::PostLogin(APlayerController* NewPlayer)

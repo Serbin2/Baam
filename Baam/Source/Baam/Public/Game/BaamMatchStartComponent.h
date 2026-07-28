@@ -27,6 +27,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Baam|Match")
 	bool StartMatch();
 
+	// 지금 새 플레이어를 받아도 되는가. 거절 사유는 OutError 로 돌려준다.
+	// 클라의 bAllowJoinInProgress 검사는 검색 스냅샷이라 못 믿는다 — 서버 판정이 최종.
+	bool CanAcceptPlayer(FString& OutError) const;
+
 	UFUNCTION(BlueprintPure, Category = "Baam|Match")
 	bool IsMatchStarted() const { return bMatchStarted; }
 
