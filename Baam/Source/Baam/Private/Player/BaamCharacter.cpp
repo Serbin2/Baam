@@ -109,6 +109,11 @@ void ABaamCharacter::ApplyCharacterDataRow(const FGameplayTag& RowTag)
 	// (잘못된 태그로 능력이 전부 날아가는 것 방지).
 	ClearCharacterDataRow();
 
+	UE_LOG(LogTemp, Log, TEXT("[Bang] 능력 부여 시작 — %s (역할=%s, GE %d개 / 어빌리티 %d개)"),
+		*GetName(), *RowTag.ToString(),
+		(Row->DefaultAttributeGE ? 1 : 0) + Row->PassiveEffects.Num(),
+		Row->GrantedAbilities.Num());
+
 	// ── 스탯 GE + 패시브 GE 적용 ──
 	TArray<TSubclassOf<UGameplayEffect>> EffectsToApply;
 	if (Row->DefaultAttributeGE)
@@ -128,27 +133,49 @@ void ABaamCharacter::ApplyCharacterDataRow(const FGameplayTag& RowTag)
 		Context.AddSourceObject(this);
 
 		const FGameplayEffectSpecHandle Spec = AbilitySystemComponent->MakeOutgoingSpec(EffectClass, 1.f, Context);
-		if (Spec.IsValid())
+		if (!Spec.IsValid())
 		{
-			// Infinite/Duration GE 만 유효 핸들을 돌려준다(Instant 는 무효) → 재적용 시 제거용으로 추적.
-			const FActiveGameplayEffectHandle Handle =
-				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-			if (Handle.IsValid())
-			{
-				AppliedEffectHandles.Add(Handle);
-			}
+			UE_LOG(LogTemp, Error, TEXT("[Bang]   이펙트 적용 실패 — %s (Spec 무효)"), *EffectClass->GetName());
+			continue;
 		}
+
+		// Infinite/Duration GE 만 유효 핸들을 돌려준다(Instant 는 무효) → 재적용 시 제거용으로 추적.
+		const FActiveGameplayEffectHandle Handle =
+			AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+		if (Handle.IsValid())
+		{
+			AppliedEffectHandles.Add(Handle);
+		}
+		UE_LOG(LogTemp, Log, TEXT("[Bang]   이펙트 적용 — %s (%s)"),
+			*EffectClass->GetName(), Handle.IsValid() ? TEXT("지속, 추적됨") : TEXT("즉시"));
 	}
 
 	// ── 능동 어빌리티 부여 ──
 	for (const TSubclassOf<UGameplayAbility>& AbilityClass : Row->GrantedAbilities)
 	{
-		if (AbilityClass)
+		if (!AbilityClass)
 		{
-			GrantedAbilityHandles.Add(
-				AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, this)));
+			UE_LOG(LogTemp, Warning, TEXT("[Bang]   능력 부여 스킵 — %s 의 GrantedAbilities 에 빈 항목."),
+				*RowTag.ToString());
+			continue;
+		}
+
+		const FGameplayAbilitySpecHandle Handle =
+			AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, this));
+
+		if (Handle.IsValid())
+		{
+			GrantedAbilityHandles.Add(Handle);
+			UE_LOG(LogTemp, Log, TEXT("[Bang]   능력 부여 성공 — %s"), *AbilityClass->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[Bang]   능력 부여 실패 — %s (핸들 무효)"), *AbilityClass->GetName());
 		}
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Bang] 능력 부여 완료 — %s (어빌리티 %d개 부여됨)"),
+		*GetName(), GrantedAbilityHandles.Num());
 }
 
 void ABaamCharacter::ClearCharacterDataRow()
