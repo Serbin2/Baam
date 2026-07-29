@@ -68,8 +68,10 @@ public:
 	EBaamDiceOutcome ClassifyRoll(int32 Roll, int32 Faces = 0) const;
 
 	// 주사위를 굴려 판정 결과를 반환한다 (굴린 눈은 OutRoll). 로그도 남긴다.
+	//   RollBonus: 판정에만 더해지는 보정치(행운·민첩 등). OutRoll(원본 눈)은 그대로 두고,
+	//              (OutRoll + RollBonus) 로 구간을 판정한다. 값이 커지면 상위 등급이 잘 뜬다.
 	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
-	EBaamDiceOutcome RollForOutcome(int32& OutRoll, int32 Faces = 0);
+	EBaamDiceOutcome RollForOutcome(int32& OutRoll, int32 Faces = 0, int32 RollBonus = 0);
 
 	// ★ 판정 결과 → 화면/로그용 텍스트 ("대실패"/"실패"/"성공"/"대성공"). 출력용.
 	UFUNCTION(BlueprintPure, Category = "Bang|Dice")

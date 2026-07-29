@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "GameplayTagContainer.h"
 #include "BaamPlayerController.generated.h"
 
 class UGameplayAbility;
@@ -20,10 +21,11 @@ public:
 	ABaamPlayerController();
 
 	// 클라(소유): HUD 의 OnCardPlayRequested 에 바인딩한다. 서버로 중계만 한다.
-	//   InstanceId : 사용할 카드 인스턴스 (FBangCardView.InstanceId)
+	//   CardId     : 사용할 카드 종류 태그 (Card.Id.Bang / Card.Id.Beer ...). 숫자 InstanceId 대신
+	//                읽기 쉬운 태그로 지정한다. 같은 카드가 여러 장이면 손패의 첫 장을 쓴다.
 	//   TargetSeat : 대상 좌석. 대상이 필요 없으면 INDEX_NONE.
 	UFUNCTION(BlueprintCallable, Category = "Bang")
-	void RequestPlayCard(int32 InstanceId, int32 TargetSeat);
+	void RequestPlayCard(FGameplayTag CardId, int32 TargetSeat);
 
 	// ── 손패 UI 배선  ────────────────────────────────────
 	//
@@ -57,14 +59,20 @@ protected:
 	void HandleHandChanged();
 	// 클라 → 서버. 검증 후 카드 사용을 처리한다.
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerRequestPlayCard(int32 InstanceId, int32 TargetSeat);
+	void ServerRequestPlayCard(FGameplayTag CardId, int32 TargetSeat);
 
-	// 서버: 검증 통과 후 실제 처리. 카드의 메커니즘 GA 를 부여+발동한다.
-	void HandlePlayCard(int32 InstanceId, int32 TargetSeat);
+	// 서버: 검증 통과 후 실제 처리. 카드가 구동할 GA 를 부여+발동한다.
+	void HandlePlayCard(FGameplayTag CardId, int32 TargetSeat);
 
-	// BANG! 메커니즘 GA. 1단계에서는 하드코딩 — 이후 카드 데이터(UBangCardDef)에서 조회.
+	// 카드 종류(Card.Id.*) → 그 카드가 구동할 GA 매핑.
+	//   ⚠️ 반드시 에디터(BP 컨트롤러 디폴트)에서 채운다. 비어 있으면 카드가 발동되지 않는다:
+	//     Card.Id.Bang→GA_Bang, Card.Id.Beer→GA_Heal, Card.Id.Missed→GA_Missed, ...
+	//   키는 RequestPlayCard 로 넘어온 CardId 태그와 그대로 매칭된다.
 	UPROPERTY(EditDefaultsOnly, Category = "Bang")
-	TSubclassOf<UGameplayAbility> BangAbilityClass;
+	TMap<FGameplayTag, TSubclassOf<UGameplayAbility>> AbilityByCardId;
+
+	// TargetSeat → 그 좌석 플레이어의 폰. 대상이 필요 없는 카드면 INDEX_NONE → nullptr.
+	AActor* ResolveTargetActor(int32 TargetSeat) const;
 
 private:
 	// HUD 가 넘겨준 손패 위젯. 소유는 HUD 에 있고 여기서는 참조만 한다.

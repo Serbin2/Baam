@@ -204,14 +204,26 @@ EBaamDiceOutcome ABaamGameMode::ClassifyRoll(int32 Roll, int32 Faces) const
 	return EBaamDiceOutcome::CriticalSuccess;
 }
 
-EBaamDiceOutcome ABaamGameMode::RollForOutcome(int32& OutRoll, int32 Faces)
+EBaamDiceOutcome ABaamGameMode::RollForOutcome(int32& OutRoll, int32 Faces, int32 RollBonus)
 {
 	OutRoll = RollDice(Faces);
-	const EBaamDiceOutcome Outcome = ClassifyRoll(OutRoll, Faces);
+
+	// 보정치는 판정에만 반영한다(원본 눈 OutRoll 은 로그/연출용으로 보존).
+	// ClassifyRoll 이 내부에서 [1, N] 으로 클램프하므로 초과분은 자동으로 대성공에 수렴.
+	const int32 EffectiveRoll = OutRoll + RollBonus;
+	const EBaamDiceOutcome Outcome = ClassifyRoll(EffectiveRoll, Faces);
 
 	const int32 N = (Faces > 0) ? Faces : DiceFaces;
-	UE_LOG(LogTemp, Log, TEXT("[Bang] 판정 — d%d 눈 %d → %s"),
-		N, OutRoll, *GetOutcomeText(Outcome).ToString());
+	if (RollBonus != 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bang] 판정 — d%d 눈 %d (보정 %+d → %d) → %s"),
+			N, OutRoll, RollBonus, EffectiveRoll, *GetOutcomeText(Outcome).ToString());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bang] 판정 — d%d 눈 %d → %s"),
+			N, OutRoll, *GetOutcomeText(Outcome).ToString());
+	}
 	return Outcome;
 }
 

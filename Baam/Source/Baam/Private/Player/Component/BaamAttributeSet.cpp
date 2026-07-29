@@ -14,6 +14,12 @@ UBaamAttributeSet::UBaamAttributeSet()
 	InitMissedRequired(1.f);
 	InitDrawCount(2.f);
 	InitDrawBangCount(1.f);
+
+	// 능력치 — 기본 0 (보정 없음). 실제 값은 캐릭터 Row 의 GE 로 세팅한다.
+	InitStrength(0.f);
+	InitAgility(0.f);
+	InitIntelligence(0.f);
+	InitLuck(0.f);
 }
 
 void UBaamAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -30,6 +36,10 @@ void UBaamAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, MissedRequired,    COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DrawCount,         COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DrawBangCount,     COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Strength,          COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Agility,           COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Intelligence,      COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Luck,              COND_None, REPNOTIFY_Always);
 }
 
 void UBaamAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
@@ -98,4 +108,20 @@ void UBaamAttributeSet::OnRep_DrawCount(const FGameplayAttributeData& OldValue)
 void UBaamAttributeSet::OnRep_DrawBangCount(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, DrawBangCount, OldValue);
+}
+void UBaamAttributeSet::OnRep_Strength(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, Strength, OldValue);
+}
+void UBaamAttributeSet::OnRep_Agility(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, Agility, OldValue);
+}
+void UBaamAttributeSet::OnRep_Intelligence(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, Intelligence, OldValue);
+}
+void UBaamAttributeSet::OnRep_Luck(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, Luck, OldValue);
 }
