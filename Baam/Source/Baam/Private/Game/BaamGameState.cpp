@@ -33,6 +33,7 @@ void ABaamGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ABaamGameState, PhaseTag);
 	DOREPLIFETIME(ABaamGameState, CurrentSeat);
 	DOREPLIFETIME(ABaamGameState, WinningRoleTag);
+	DOREPLIFETIME(ABaamGameState, bMatchRunning);
 }
 
 FGameplayTag ABaamGameState::GameOverPhaseTag()
@@ -258,7 +259,19 @@ FGameplayTag ABaamGameState::GetSeatRole(int32 Seat) const
 int32 ABaamGameState::GetHandLimitForSeat(int32 Seat) const
 {
 	//	뱅 규칙: 손패 한도는 "현재" 생명력이다(최대치가 아니다).
-	return GetSeatHealth(Seat);
+	const int32 Health = GetSeatHealth(Seat);
+
+	//	ASC 를 못 찾으면 GetSeatHealth 가 0 을 준다(폰 미스폰 / DefaultPawnClass 가 ABaamCharacter 가 아님).
+	//	그대로 한도 0 이 되면 손패를 전부 버려야만 턴이 넘어가고 그 사이 카드도 못 내는 잠금이 된다.
+	//	설정 실수로 판이 멈추는 것보다 한도를 잠시 풀어두는 쪽이 낫다.
+	if (Health <= 0)
+	{
+		UE_LOG(LogBaamCard, Warning,
+			TEXT("[Turn] 좌석 %d 의 Health 를 읽지 못했습니다(ASC 없음?) — 손패 한도를 적용하지 않습니다."), Seat);
+		return TNumericLimits<int32>::Max();
+	}
+
+	return Health;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════

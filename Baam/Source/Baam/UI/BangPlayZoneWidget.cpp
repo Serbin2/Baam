@@ -35,6 +35,13 @@ bool UBangPlayZoneWidget::NativeOnDrop(const FGeometry& InGeometry, const FDragD
 	// 최종 판정은 언제나 서버가 한다.
 	if (!CardOp->CardView.bPlayable)
 	{
+		// 조용히 무시하면 "왜 카드가 안 나가지" 로 시간을 버린다.
+		// bPlayable 은 MakeHandViews 가 턴/페이즈를 보고 정한다 — 여기가 찍히는데
+		// 자기 차례가 맞다면 GameState 의 턴 상태가 클라까지 오지 않은 것이다.
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Bang] 플레이 존: 카드 %s(#%d) 가 bPlayable=false 라 드롭을 거부했습니다 "
+			     "(자기 차례가 아니거나, 턴 상태가 클라에 복제되지 않음)."),
+			*CardOp->CardView.CardId.ToString(), CardOp->CardView.InstanceId);
 		return true;
 	}
 

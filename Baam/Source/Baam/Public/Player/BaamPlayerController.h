@@ -13,6 +13,7 @@
 class UGameplayAbility;
 class UBangHandWidget;
 class UBangSeatBoardWidget;
+class UBangTurnPanelWidget;
 class ABaamPlayerState;
 
 UCLASS()
@@ -56,6 +57,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
 	void RefreshSeatBoard();
+
+	// ── 턴 패널 UI 배선 ──────────────────────────────────────────
+	//
+	// HUD 가 자기 안의 턴 패널을 한 번 넘겨준다. 좌석 보드와 같은 타이머로 함께 갱신된다.
+	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
+	void SetTurnPanelWidget(UBangTurnPanelWidget* InTurnPanel);
+
+	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
+	void RefreshTurnPanel();
 
 	// ── 대상 좌석 선택 ───────────────────────────────────────────
 
@@ -142,6 +152,10 @@ protected:
 	UFUNCTION()
 	void HandleTargetSelectionCancelled(int32 ContextId);
 
+	/** 턴 패널의 턴 종료 버튼. */
+	UFUNCTION()
+	void HandleEndTurnRequested();
+
 	/** 우클릭 / ESC 로 대상 선택을 취소한다. */
 	virtual void SetupInputComponent() override;
 
@@ -192,6 +206,9 @@ private:
 	// HUD 가 넘겨준 좌석 보드. 소유는 HUD 에 있고 여기서는 참조만 한다.
 	UPROPERTY()
 	TObjectPtr<UBangSeatBoardWidget> SeatBoardWidget;
+
+	UPROPERTY()
+	TObjectPtr<UBangTurnPanelWidget> TurnPanelWidget;
 
 	FTimerHandle SeatRefreshTimer;
 };

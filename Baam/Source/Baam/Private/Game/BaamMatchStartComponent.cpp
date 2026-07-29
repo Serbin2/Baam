@@ -119,7 +119,7 @@ bool UBaamMatchStartComponent::StartMatch()
 
 	UE_LOG(LogBaamNet, Log, TEXT("[MatchStart] 판 시작(%d명) — 역할 배정"), Players.Num());
 	GM->AssignRoles();
-
+		
 	// 역할 배정으로 좌석과 스탯(Health)이 확정된 뒤에 판을 연다.
 	// StartMatch 가 초기 손패를 Health 만큼 나눠주므로 순서가 뒤바뀌면 안 된다.
 	if (ABaamGameState* GS = GM->GetGameState<ABaamGameState>())

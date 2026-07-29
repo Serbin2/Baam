@@ -73,8 +73,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
 	int32 GetCurrentSeat() const { return CurrentSeat; }
 
-	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
-	FGameplayTag GetPhaseTag() const { return PhaseTag; }
+	//	GetPhaseTag() 는 위 Baam|Phase 섹션에 있다 (머지 중복 제거).
 
 	/** 이 좌석이 지금 카드를 낼 수 있는가 (자기 턴 + Play 페이즈). */
 	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
@@ -195,7 +194,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Baam|Turn")
 	int32 InitialHandSize = 0;
 
-	//	무한 루프 방지 — 살아있는 좌석을 못 찾을 때의 안전장치.
+	//	판이 진행 중인가. 무한 루프 방지 겸 턴 검증의 첫 조건이다.
+	//	⚠️ 반드시 복제할 것 — CanSeatPlayCards / CanSeatDiscard 를 클라도 호출한다
+	//	   (손패의 bPlayable 계산과 플레이 존 드롭 판정이 여기 달려 있다).
+	//	   복제하지 않으면 클라에서 항상 false 라 자기 차례에도 카드가 나가지 않는다.
+	UPROPERTY(Replicated)
 	bool bMatchRunning = false;
 	
 	//	⚠️ 덱 셔플 전용 스트림이다. 주사위 판정은 UBaamDiceComponent 가 별도 스트림을 쓴다

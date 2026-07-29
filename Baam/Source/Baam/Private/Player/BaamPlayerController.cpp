@@ -16,6 +16,7 @@
 #include "GameFramework/GameStateBase.h"      // PlayerArray
 #include "UI/BangHandWidget.h"
 #include "UI/BangSeatBoardWidget.h"
+#include "UI/BangTurnPanelWidget.h"
 #include "Components/InputComponent.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
@@ -216,11 +217,93 @@ void ABaamPlayerController::SetSeatBoardWidget(UBangSeatBoardWidget* InSeatBoard
 
 void ABaamPlayerController::RefreshSeatBoard()
 {
-	if (!SeatBoardWidget)
+	if (SeatBoardWidget)
+	{
+		SeatBoardWidget->SetSeats(UBaamSeatViewLibrary::MakeSeatViews(this));
+	}
+
+	//	좌석 보드와 같은 타이머를 쓴다 — 갱신 주기가 갈리면 "턴은 넘어갔는데 버튼은 그대로" 가 된다.
+	RefreshTurnPanel();
+}
+
+// ======================================================================================
+//  턴 패널 UI 배선
+// ======================================================================================
+
+void ABaamPlayerController::SetTurnPanelWidget(UBangTurnPanelWidget* InTurnPanel)
+{
+	if (TurnPanelWidget && TurnPanelWidget != InTurnPanel)
+	{
+		TurnPanelWidget->OnEndTurnRequested.RemoveDynamic(this, &ABaamPlayerController::HandleEndTurnRequested);
+	}
+
+	TurnPanelWidget = InTurnPanel;
+
+	if (TurnPanelWidget)
+	{
+		TurnPanelWidget->OnEndTurnRequested.AddDynamic(this, &ABaamPlayerController::HandleEndTurnRequested);
+	}
+
+	RefreshTurnPanel();
+}
+
+void ABaamPlayerController::HandleEndTurnRequested()
+{
+	RequestEndTurn();
+}
+
+void ABaamPlayerController::RefreshTurnPanel()
+{
+	if (!TurnPanelWidget)
 	{
 		return;
 	}
-	SeatBoardWidget->SetSeats(UBaamSeatViewLibrary::MakeSeatViews(this));
+
+	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>();
+
+	FBangTurnView View;
+	View.MySeat    = GetMySeatIndex();
+	View.HandCount = PS ? PS->GetHandCount() : 0;
+
+	if (!GS)
+	{
+		View.StatusText = NSLOCTEXT("Bang", "TurnWaiting", "대기 중...");
+		TurnPanelWidget->SetTurnView(View);
+		return;
+	}
+
+	View.CurrentSeat   = GS->GetCurrentSeat();
+	View.DeckCount     = GS->GetDeckCount();
+	View.bIsMyTurn     = GS->CanSeatPlayCards(View.MySeat);
+	View.bIsMyDiscard  = GS->CanSeatDiscard(View.MySeat);
+	View.bMatchRunning = (View.CurrentSeat != INDEX_NONE);
+
+	//	한도가 int32 최대치면 "한도 없음"(설정 문제로 Health 를 못 읽은 상태)이므로 숨긴다.
+	const int32 Limit = GS->GetHandLimitForSeat(View.MySeat);
+	View.HandLimit = (Limit >= TNumericLimits<int32>::Max()) ? INDEX_NONE : Limit;
+
+	if (View.bIsMyDiscard)
+	{
+		const int32 Excess = FMath::Max(0, View.HandCount - FMath::Max(0, View.HandLimit));
+		View.StatusText = FText::FromString(
+			FString::Printf(TEXT("손패가 많습니다 — %d 장을 버리세요 (중앙에 드롭)"), Excess));
+	}
+	else if (View.bIsMyTurn)
+	{
+		View.StatusText = NSLOCTEXT("Bang", "TurnMine", "내 차례입니다");
+	}
+	else if (View.bMatchRunning)
+	{
+		View.StatusText = FText::FromString(
+			FString::Printf(TEXT("좌석 %d 진행 중"), View.CurrentSeat));
+	}
+	else
+	{
+		View.StatusText = NSLOCTEXT("Bang", "TurnNotStarted", "판 시작 대기 중");
+	}
+
+	TurnPanelWidget->SetTurnView(View);
 }
 
 // ======================================================================================
