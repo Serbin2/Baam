@@ -52,7 +52,16 @@ public:
 	FGameplayAttributeData DistanceIncrease;
 	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, DistanceIncrease)
 
-	// 턴당 BANG! 사용 한도. Volcanic / Willy the Kid → 큰 수.
+	// 턴당 능동적으로 사용할 수 있는 카드 수 (GDD §7.1 확정 스탯). 초기값 2.
+	//   - 버리기(Discard 페이즈)는 "카드 사용" 이 아니므로 소비하지 않는다.
+	//   - 판정에 실패한 갈색 카드도 소비한다 (GDD §5.3).
+	//   - 장비·캐릭터 능력·상태 효과가 GE 로 이 값을 올리거나 내릴 수 있다.
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CardUseLimit, Category = "Bang")
+	FGameplayAttributeData CardUseLimit;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, CardUseLimit)
+
+	// [비활성] 턴당 BANG! 사용 한도. GDD §3 에서 뱅! 전용 제한을 없앴다 — CardUseLimit 이 대신한다.
+	//   선언만 유지하고 참조하지 않는다 (GDD §13.1 비활성 처리).
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_BangLimit, Category = "Bang")
 	FGameplayAttributeData BangLimit;
 	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, BangLimit)
@@ -105,6 +114,7 @@ protected:
 	UFUNCTION() void OnRep_WeaponRange(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_DistanceReduction(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_DistanceIncrease(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_CardUseLimit(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_BangLimit(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_MissedRequired(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_DrawCount(const FGameplayAttributeData& OldValue);

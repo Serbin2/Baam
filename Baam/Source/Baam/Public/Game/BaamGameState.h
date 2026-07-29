@@ -93,6 +93,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
 	int32 GetHandLimitForSeat(int32 Seat) const;
 
+	// ── 턴당 카드 사용 한도 (GDD §5.2 / §7.1) ──
+
+	/** 어트리뷰트 CardUseLimit. ASC 를 못 읽으면 DefaultCardUseLimit 로 폴백한다. */
+	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
+	int32 GetCardUseLimitForSeat(int32 Seat) const;
+
+	/** 이번 턴에 아직 카드를 낼 수 있는가(사용 횟수만 본다 — 턴/페이즈는 CanSeatPlayCards). */
+	UFUNCTION(BlueprintPure, Category = "Baam|Turn")
+	bool HasCardUsesLeft(int32 Seat) const;
+
 	// ── 좌석 조회 (거리 계산·턴 진행의 공통 기준) ──
 
 	/** 살아 있는 좌석만 좌석 번호 순으로. 사망자는 원에서 빠지므로 거리도 함께 바뀐다. */
@@ -189,6 +199,10 @@ protected:
 	//	턴 시작 시 뽑는 장수의 폴백. 정상 경로는 어트리뷰트 DrawCount 를 읽는다.
 	UPROPERTY(EditDefaultsOnly, Category = "Baam|Turn", meta = (ClampMin = "1"))
 	int32 DefaultDrawCount = 2;
+
+	//	CardUseLimit 을 읽지 못했을 때의 폴백. GDD §7.1 초기값과 맞춘다.
+	UPROPERTY(EditDefaultsOnly, Category = "Baam|Turn", meta = (ClampMin = "1"))
+	int32 DefaultCardUseLimit = 2;
 
 	//	판 시작 시 나눠줄 초기 손패. 0 이하면 좌석의 Health 만큼 준다(뱅 원작 규칙).
 	UPROPERTY(EditDefaultsOnly, Category = "Baam|Turn")

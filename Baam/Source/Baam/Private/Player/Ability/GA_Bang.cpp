@@ -51,13 +51,34 @@ void UGA_Bang::ActivateAbility(
 		return;
 	}
 
-	// ── 판정: 행운(Luck)을 굴림 보정으로 넣어 주사위를 굴린다 ──
-	const int32 LuckBonus = FMath::RoundToInt(SourceAS->GetLuck());
-	int32 Roll = 0;
-	const EBaamDiceOutcome Outcome = Dice->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/LuckBonus);
+	// ── 판정 결과 수신 (GDD §9.1) ──
+	//	판정은 서버(ABaamPlayerController::HandlePlayCard)가 카드 데이터로 이미 끝냈다.
+	//	여기서 다시 굴리지 않는다 — GA 는 "결과 실행" 만 한다.
+	//	Resolution.* 태그가 없으면(판정 없이 발동된 경우) 이 GA 의 기본값으로 폴백한다.
+	static const FGameplayTag ResolutionRoot = FGameplayTag::RequestGameplayTag(TEXT("Resolution"));
+	const bool bHasServerOutcome =
+		TriggerEventData && TriggerEventData->InstigatorTags.HasTag(ResolutionRoot);
+
+	EBaamDiceOutcome Outcome = EBaamDiceOutcome::Failure;
+	int32 Roll = INDEX_NONE;
+	int32 TierBase = 0;
+
+	if (bHasServerOutcome)
+	{
+		Outcome  = UBaamDiceComponent::TagsToOutcome(TriggerEventData->InstigatorTags, EBaamDiceOutcome::Failure);
+		TierBase = FMath::RoundToInt(TriggerEventData->EventMagnitude);   // 카드 데이터의 등급별 수치
+	}
+	else
+	{
+		//	[폴백] 판정 없이 발동됨 — 이 GA 의 자체 비율/피해로 굴린다(구형 경로).
+		const int32 LuckBonus = FMath::RoundToInt(SourceAS->GetLuck());
+		Outcome  = Dice->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/LuckBonus);
+		TierBase = TierBaseDamage(Outcome);
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Bang] GA_Bang: 서버 판정 결과가 없어 자체 판정으로 폴백했습니다(카드 데이터 확인)."));
+	}
 
 	// ── 피해 계산: 등급 기본 피해 × 힘 배율 − 대상 지능 경감 ──
-	const int32 TierBase = TierBaseDamage(Outcome);
 
 	int32 FinalDamage = 0;
 	if (TierBase > 0)
@@ -92,9 +113,9 @@ void UGA_Bang::ActivateAbility(
 	}
 
 	BaamDebug::Screen(
-		FString::Printf(TEXT("뱅  %s → [%s] 눈%d(행운%+d)  기본%d ×힘 → 피해 %d  대상:%s"),
+		FString::Printf(TEXT("뱅  %s → [%s]  기본%d ×힘 → 피해 %d  대상:%s"),
 			Avatar ? *Avatar->GetName() : TEXT("?"),
-			*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(), Roll, LuckBonus, TierBase, FinalDamage,
+			*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(), TierBase, FinalDamage,
 			TargetActor ? *TargetActor->GetName() : TEXT("없음")),
 		OutcomeColor, /*Time=*/5.f);
 

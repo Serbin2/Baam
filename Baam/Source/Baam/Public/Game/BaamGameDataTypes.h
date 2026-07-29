@@ -25,6 +25,76 @@ enum class EBaamDiceOutcome : uint8
 };
 
 /**
+ * 4단계 판정의 상대 비율 (GDD §4.2 / §4.3).
+ *
+ * 합이 100 일 필요는 없다 — 시스템이 정규화한다. 기획은 상대값으로 입력한다.
+ * 보정(캐릭터·장비·상태)은 이 비율에 더해진 뒤 정규화된다.
+ */
+USTRUCT(BlueprintType)
+struct FBaamOutcomeWeights
+{
+	GENERATED_BODY()
+
+	//	GDD §4.4: 대실패 비율은 낮게 유지한다. 통제 불능이라는 인상을 주면 공격 자체가 위축된다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"))
+	int32 CriticalFailure = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"))
+	int32 Failure = 20;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"))
+	int32 Success = 65;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"))
+	int32 CriticalSuccess = 10;
+
+	int32 Sum() const { return CriticalFailure + Failure + Success + CriticalSuccess; }
+
+	/** 보정을 더한다. 음수로 내려간 항목은 0 으로 클램프한다 (GDD §4.2). */
+	void ApplyBonus(int32 SuccessBonus, int32 CriticalBonus)
+	{
+		Success         = FMath::Max(0, Success + SuccessBonus);
+		CriticalSuccess = FMath::Max(0, CriticalSuccess + CriticalBonus);
+	}
+};
+
+/**
+ * 판정 등급별 효과 수치 (GDD §4.3). 카드에 따라 피해량·회복량·뽑는 장수 등으로 해석된다.
+ *
+ * GDD §4.1: `실패`는 효과가 발생하지 않는 것이 기본안이므로 0 이다.
+ * GDD §4.4: `대실패`가 모든 카드에 불이익을 강제하지 않는다 — 필요 없으면 0 으로 둔다.
+ */
+USTRUCT(BlueprintType)
+struct FBaamOutcomeMagnitudes
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 CriticalFailure = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Failure = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Success = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 CriticalSuccess = 2;
+
+	int32 ForOutcome(EBaamDiceOutcome Outcome) const
+	{
+		switch (Outcome)
+		{
+		case EBaamDiceOutcome::CriticalSuccess: return CriticalSuccess;
+		case EBaamDiceOutcome::Success:         return Success;
+		case EBaamDiceOutcome::Failure:         return Failure;
+		case EBaamDiceOutcome::CriticalFailure: return CriticalFailure;
+		default:                                return 0;
+		}
+	}
+};
+
+/**
  * 캐릭터(또는 역할) 1종의 GAS 구성을 서술하는 DT Row.
  *   - Row 이름 = CharacterTag 의 태그 문자열 (예: "Character.Ability.PaulRegret").
  *     DataSubsystem 이 태그로 이 Row 를 찾아 캐릭터에 부여한다.
@@ -118,7 +188,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0"))
 	int32 QuantityOfCard = 0;
 	
-	//	확률을 사용하는 카드의 경우, 성공 판정을 받기 위해 필요한 성공값 수
+	//	[비활성] 확률을 사용하는 카드의 성공 판정 기준값.
+	//	  OutcomeWeights 로 대체됐다 (GDD §4.2 — 4단계 비율 방식). 참조하지 않는다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0"))
 	int32 CheckChance = 0;
+
+	// ── 4단계 판정 (GDD §4.2 / §4.3) ──────────────────────────────
+
+	//	판정 비율. 합이 100 일 필요 없다(정규화됨).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
+	FBaamOutcomeWeights OutcomeWeights;
+
+	//	등급별 효과 수치. 카드에 따라 피해량·회복량·장수 등으로 해석된다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
+	FBaamOutcomeMagnitudes OutcomeMagnitudes;
+
+	//	이 카드가 받을 수 있는 보정의 종류 (GDD §4.3 "보정 허용 태그").
+	//	비어 있으면 모든 보정을 받는다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
+	FGameplayTagContainer ModifierTags;
 };

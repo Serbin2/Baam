@@ -10,7 +10,9 @@
 #include "Game/BaamCardViewLibrary.h"
 #include "Game/BaamDataSubsystem.h"           // GetCardRow
 #include "Game/BaamGameDataTypes.h"           // FBaamCardRow
+#include "Game/BaamDiceComponent.h"           // 4단계 판정
 #include "Game/BaamGameState.h"               // PushToDiscard
+#include "Player/Component/BaamAttributeSet.h" // Luck
 #include "Game/BaamPlayerState.h"
 #include "Game/BaamSeatViewLibrary.h"
 #include "GameFramework/GameStateBase.h"      // PlayerArray
@@ -74,9 +76,15 @@ void ABaamPlayerController::UpdateHandInteractionLock()
 	//	잠금 조건을 한곳에서 계산한다. 두 소스가 각자 Set 하면 서로 덮어써서
 	//	"대상 선택 중인데 잠금이 풀린다" 같은 상태가 생긴다.
 	const bool bSelectingTarget = SeatBoardWidget && SeatBoardWidget->IsSelectingTarget();
-	const bool bMyActionPhase   = IsMyTurnToPlay() || IsMyTurnToDiscard();
 
-	HandWidget->SetInteractionLocked(bSelectingTarget || !bMyActionPhase);
+	//	Play 페이즈에서는 사용 횟수가 남아 있어야 조작할 수 있다(GDD §5.2).
+	//	Discard 페이즈는 버리기라 한도와 무관하다.
+	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	const int32 MySeat = GetMySeatIndex();
+	const bool bCanPlay    = IsMyTurnToPlay() && GS && GS->HasCardUsesLeft(MySeat);
+	const bool bCanDiscard = IsMyTurnToDiscard();
+
+	HandWidget->SetInteractionLocked(bSelectingTarget || !(bCanPlay || bCanDiscard));
 }
 
 void ABaamPlayerController::HandleCardPlayRequested(const FBangCardView& Card)
@@ -297,6 +305,8 @@ void ABaamPlayerController::RefreshTurnPanel()
 
 	View.CurrentSeat   = GS->GetCurrentSeat();
 	View.DeckCount     = GS->GetDeckCount();
+	View.CardsUsed     = PS ? PS->GetCardsUsedThisTurn() : 0;
+	View.CardUseLimit  = GS->GetCardUseLimitForSeat(View.MySeat);
 	View.bIsMyTurn     = GS->CanSeatPlayCards(View.MySeat);
 	View.bIsMyDiscard  = GS->CanSeatDiscard(View.MySeat);
 	View.bMatchRunning = (View.CurrentSeat != INDEX_NONE);
@@ -313,7 +323,9 @@ void ABaamPlayerController::RefreshTurnPanel()
 	}
 	else if (View.bIsMyTurn)
 	{
-		View.StatusText = NSLOCTEXT("Bang", "TurnMine", "내 차례입니다");
+		View.StatusText = (View.CardsUsed >= View.CardUseLimit)
+			? NSLOCTEXT("Bang", "TurnMineNoUses", "카드 사용 한도를 다 썼습니다 — 턴을 종료하세요")
+			: NSLOCTEXT("Bang", "TurnMine", "내 차례입니다");
 	}
 	else if (View.bMatchRunning)
 	{
@@ -467,6 +479,19 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 				FColor::Orange, /*Time=*/5.f);
 			return;
 		}
+
+		//	턴당 카드 사용 한도 (GDD §5.2). 버리기는 이 경로를 타지 않으므로 영향받지 않는다.
+		if (GBangIgnoreTurnOrder == 0 && GS && !GS->HasCardUsesLeft(MySeat))
+		{
+			const ABaamPlayerState* MyPS = GetPlayerState<ABaamPlayerState>();
+			BaamDebug::Screen(
+				FString::Printf(TEXT("[서버] 이번 턴 카드 사용 한도를 다 썼습니다 (%d / %d). 카드 #%d 거부."),
+					MyPS ? MyPS->GetCardsUsedThisTurn() : 0,
+					GS->GetCardUseLimitForSeat(MySeat),
+					InstanceId),
+				FColor::Orange, /*Time=*/5.f);
+			return;
+		}
 	}
 
 	// 시전자의 ASC 를 얻는다 (현재 ASC 는 캐릭터 소유).
@@ -484,6 +509,7 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	//              RemoveCardFromHand 로 그 인스턴스를 빼는 처리가 남았다.
 	FGameplayTag CardId;    // 맵 조회 키 (Card.Id.*)
 	FGameplayTag EventTag;  // 페이로드/로그용 메커니즘 태그 (Ability.*)
+	const FBaamCardRow* CardRow = nullptr;   // 판정 데이터 (OutcomeWeights / OutcomeMagnitudes)
 	if (const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
 	{
 		const UGameInstance* GI = GetGameInstance();
@@ -497,6 +523,7 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 				{
 					CardId   = Row->CardIdTag;
 					EventTag = Row->AbilityEventTag;
+					CardRow  = Row;   //	판정 비율·등급별 수치를 아래에서 읽는다
 				}
 				break;
 			}
@@ -547,6 +574,52 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 		Payload.Target = TargetActor;
 	}
 
+	// ── 4단계 판정 (GDD §4.2 / §9.1) ──
+	//	판정은 서버가 여기서 한 번만 한다. GA 는 "결과 실행" 만 담당한다 —
+	//	GA 마다 각자 굴리면 중복 판정과 "같은 판정을 두 번 적용" 위험이 생긴다(GDD §9.2).
+	//	결과는 Resolution.* 태그로, 등급별 수치는 EventMagnitude 로 실어 보낸다.
+	{
+		UBaamDiceComponent* Dice = UBaamDiceComponent::Get(this);
+		const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+
+		if (Dice && CardRow)
+		{
+			//	행운 보정을 비율에 더한다(GDD §4.2 — 보정은 비율에 반영).
+			int32 Luck = 0;
+			if (const UBaamAttributeSet* AS = ASC->GetSet<UBaamAttributeSet>())
+			{
+				Luck = FMath::RoundToInt(AS->GetLuck());
+			}
+			const FBaamOutcomeWeights Weights = Dice->ApplyLuck(CardRow->OutcomeWeights, Luck);
+
+			int32 Roll = INDEX_NONE;
+			const EBaamDiceOutcome Outcome = Dice->RollOutcome(Weights, Roll);
+			const int32 Magnitude = CardRow->OutcomeMagnitudes.ForOutcome(Outcome);
+
+			Payload.InstigatorTags.AddTag(UBaamDiceComponent::OutcomeToTag(Outcome));
+			Payload.EventMagnitude = static_cast<float>(Magnitude);
+
+			float CF = 0.f, F = 0.f, S = 0.f, CS = 0.f;
+			UBaamDiceComponent::GetOutcomeChances(Weights, CF, F, S, CS);
+
+			BaamDebug::Screen(
+				FString::Printf(TEXT("[판정] %s → %s  (눈 %d / 확률 대실패%.0f%% 실패%.0f%% 성공%.0f%% 대성공%.0f%%, 행운%+d)  수치 %d"),
+					*CardId.ToString(),
+					*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(),
+					Roll, CF, F, S, CS, Luck, Magnitude),
+				(Outcome == EBaamDiceOutcome::CriticalSuccess) ? FColor(255, 140, 0) :
+				(Outcome == EBaamDiceOutcome::Success)         ? FColor::Yellow :
+				(Outcome == EBaamDiceOutcome::Failure)         ? FColor(160, 160, 160) :
+				                                                 FColor::Red,
+				/*Time=*/6.f);
+		}
+		else if (!Dice)
+		{
+			//	판정 없이 GA 를 발동하면 GA 가 자체 기본값으로 폴백한다(과거 동작).
+			UE_LOG(LogBaamCard, Warning, TEXT("[Bang] BaamDiceComponent 없음 — 판정 없이 진행합니다."));
+		}
+	}
+
 	BaamDebug::Screen(
 		FString::Printf(TEXT("[서버] 카드처리  %s #%d  메커니즘[%s] → %s  대상:%s"),
 			*CardId.ToString(),
@@ -576,6 +649,20 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	// 뱅 규칙: 낸 카드는 결과와 무관하게 버린 패로 간다.
 	// (뱅!이 빗나가도 그 뱅! 카드는 돌아오지 않는다)
 	ConsumeCard(InstanceId);
+
+	//	판정 실패도 사용 횟수를 소비한다 (GDD §5.3).
+	//	⚠️ ConsumeCard 안이 아니라 여기서 센다 — ConsumeCard 는 버리기도 함께 쓰는데
+	//	   버리기는 "카드 사용" 이 아니라 사용 횟수를 소비하면 안 된다.
+	if (ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
+	{
+		PS->IncrementCardsUsedThisTurn();
+
+		if (const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr)
+		{
+			UE_LOG(LogBaamCard, Log, TEXT("[Turn] 좌석 %d 카드 사용 %d / %d"),
+				GetMySeatIndex(), PS->GetCardsUsedThisTurn(), GS->GetCardUseLimitForSeat(GetMySeatIndex()));
+		}
+	}
 }
 
 // ======================================================================================

@@ -128,6 +128,18 @@ namespace Bang
 	}
 
 	// ---------------------------------------------------------------------------------
+	//  Resolution.* — 4단계 판정 결과 (GDD §4.1 / §9.3).
+	//    서버가 판정한 뒤 GameplayEventData 에 실어 GA 로 넘긴다. GA 는 판정하지 않고 실행만 한다.
+	// ---------------------------------------------------------------------------------
+	namespace Resolution
+	{
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(CriticalFailure)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Failure)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(Success)
+		UE_DECLARE_GAMEPLAY_TAG_EXTERN(CriticalSuccess)
+	}
+
+	// ---------------------------------------------------------------------------------
 	//  Role.* — 숨겨진 진영 역할. Sheriff 만 공개, 나머지는 사망 시 공개 (md §0/§1.3).
 	// ---------------------------------------------------------------------------------
 	namespace Role

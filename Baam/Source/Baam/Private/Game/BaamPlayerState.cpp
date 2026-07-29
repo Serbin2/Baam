@@ -23,6 +23,23 @@ void ABaamPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ABaamPlayerState, Equipment);
 	DOREPLIFETIME(ABaamPlayerState, bIsDead);
 	DOREPLIFETIME(ABaamPlayerState, PublicRoleTag);
+	DOREPLIFETIME(ABaamPlayerState, CardsUsedThisTurn);
+}
+
+void ABaamPlayerState::ResetCardsUsedThisTurn()
+{
+	if (HasAuthority())
+	{
+		CardsUsedThisTurn = 0;
+	}
+}
+
+void ABaamPlayerState::IncrementCardsUsedThisTurn()
+{
+	if (HasAuthority())
+	{
+		++CardsUsedThisTurn;
+	}
 }
 
 void ABaamPlayerState::SetPublicRole(const FGameplayTag& InRole)

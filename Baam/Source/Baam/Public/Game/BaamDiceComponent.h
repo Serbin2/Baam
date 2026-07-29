@@ -14,7 +14,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Math/RandomStream.h"
-#include "Game/BaamGameDataTypes.h"   // EBaamDiceOutcome
+#include "GameplayTagContainer.h"
+#include "Game/BaamGameDataTypes.h"   // EBaamDiceOutcome / FBaamOutcomeWeights
 #include "BaamDiceComponent.generated.h"
 
 UCLASS(ClassGroup = (Baam), meta = (BlueprintSpawnableComponent))
@@ -83,6 +84,47 @@ public:
 	// 판정 결과 → 화면/로그용 텍스트 ("대실패"/"실패"/"성공"/"대성공"). 출력용.
 	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
 	static FText GetOutcomeText(EBaamDiceOutcome Outcome);
+
+	// ══════════════════════════════════════════════════════════════════
+	//  카드 데이터 기반 판정 (GDD §4.2) — 신규 정식 경로
+	//
+	//  위의 RollForOutcome 은 컴포넌트 기본 비율을 쓰는 구형 경로다.
+	//  카드마다 비율이 다르므로 아래를 쓴다: 카드 비율 + 보정 → 정규화 → 0~99 난수 1회.
+	// ══════════════════════════════════════════════════════════════════
+
+	//	행운 1점이 성공 / 대성공 비율에 더하는 값. GDD §4.2 "보정은 비율에 더한다".
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0"))
+	int32 LuckSuccessWeightPerPoint = 5;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0"))
+	int32 LuckCriticalWeightPerPoint = 2;
+
+	/** 행운 보정을 비율에 반영한 결과를 돌려준다 (순수 계산 — 클라의 확률 미리보기에도 쓴다). */
+	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
+	FBaamOutcomeWeights ApplyLuck(const FBaamOutcomeWeights& Base, int32 Luck) const;
+
+	/**
+	 * 비율로 판정한다 (서버 전용). OutRoll 은 0~99 난수 원본.
+	 * 비율 합이 0 이면 경고 후 Failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
+	EBaamDiceOutcome RollOutcome(const FBaamOutcomeWeights& Weights, int32& OutRoll);
+
+	/**
+	 * 비율 → 실제 확률(%)로 변환한다 (순수 계산). GDD §10 확률 표시용.
+	 * 서버 판정 없이 클라에서 호출해도 안전하다.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
+	static void GetOutcomeChances(const FBaamOutcomeWeights& Weights,
+		float& OutCriticalFailure, float& OutFailure, float& OutSuccess, float& OutCriticalSuccess);
+
+	// ── 결과 ↔ 태그 변환 (Resolution.*) ──
+	//    판정 주체가 여기 하나이므로 변환도 여기 모은다.
+	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
+	static FGameplayTag OutcomeToTag(EBaamDiceOutcome Outcome);
+
+	/** 태그 컨테이너에서 Resolution.* 를 찾아 결과로 되돌린다. 없으면 Fallback. */
+	static EBaamDiceOutcome TagsToOutcome(const FGameplayTagContainer& Tags, EBaamDiceOutcome Fallback);
 
 private:
 	// 판정 전용 시드 스트림 (서버에서만 굴린다). 셔플 스트림과 분리 — 위 InitializeStream 주석 참고.

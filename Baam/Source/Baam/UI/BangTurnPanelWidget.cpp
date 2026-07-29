@@ -55,6 +55,13 @@ void UBangTurnPanelWidget::RefreshVisual()
 		Text_Deck->SetText(FText::FromString(FString::Printf(TEXT("덱 %d"), TurnView.DeckCount)));
 	}
 
+	if (Text_CardUse)
+	{
+		//	GDD §10: 턴 UI 에 "사용한 카드 수 / 현재 카드 사용 한도" 를 표시한다.
+		Text_CardUse->SetText(FText::FromString(
+			FString::Printf(TEXT("카드 %d / %d"), TurnView.CardsUsed, TurnView.CardUseLimit)));
+	}
+
 	if (Button_EndTurn)
 	{
 		//	버리기 페이즈에서는 턴 종료를 누를 수 없다 — 카드를 버려야 넘어간다.

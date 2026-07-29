@@ -43,6 +43,13 @@ struct FBangTurnView
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bang|Turn")
 	int32 DeckCount = 0;
+
+	/** 이번 턴에 쓴 카드 수 / 한도 (GDD §10 — 턴 UI 필수 표시 항목). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bang|Turn")
+	int32 CardsUsed = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bang|Turn")
+	int32 CardUseLimit = 0;
 };
 
 /** 턴 종료 버튼이 눌렸다. */

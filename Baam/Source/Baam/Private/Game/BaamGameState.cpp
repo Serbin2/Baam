@@ -274,6 +274,34 @@ int32 ABaamGameState::GetHandLimitForSeat(int32 Seat) const
 	return Health;
 }
 
+int32 ABaamGameState::GetCardUseLimitForSeat(int32 Seat) const
+{
+	const ABaamPlayerState* PS = GetPlayerStateBySeat(Seat);
+	const UAbilitySystemComponent* ASC =
+		PS ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PS->GetPawn()) : nullptr;
+
+	if (!ASC)
+	{
+		//	손패 한도와 달리 여기서는 "무제한" 으로 풀지 않는다.
+		//	턴당 사용 제한은 이 게임의 핵심 행동 경제라(GDD §5.2) 설정 실패로 무력화되면 안 된다.
+		return DefaultCardUseLimit;
+	}
+
+	const int32 Limit = FMath::RoundToInt(
+		ASC->GetNumericAttribute(UBaamAttributeSet::GetCardUseLimitAttribute()));
+	return FMath::Max(0, Limit);
+}
+
+bool ABaamGameState::HasCardUsesLeft(int32 Seat) const
+{
+	const ABaamPlayerState* PS = GetPlayerStateBySeat(Seat);
+	if (!PS)
+	{
+		return false;
+	}
+	return PS->GetCardsUsedThisTurn() < GetCardUseLimitForSeat(Seat);
+}
+
 // ══════════════════════════════════════════════════════════════════════════════════════
 //  턴 진행
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -335,6 +363,12 @@ void ABaamGameState::BeginTurn(int32 Seat)
 
 	CurrentSeat = Seat;
 	SetPhase(Bang::Phase::TurnStart.GetTag());
+
+	//	턴당 카드 사용 횟수를 새로 연다(GDD §5.2).
+	if (ABaamPlayerState* PS = GetPlayerStateBySeat(Seat))
+	{
+		PS->ResetCardsUsedThisTurn();
+	}
 
 	//	TODO: 감옥/다이너마이트 뽑기 판정이 여기 들어간다(PerformDrawCheck).
 	//	      지금은 통과 페이즈다.

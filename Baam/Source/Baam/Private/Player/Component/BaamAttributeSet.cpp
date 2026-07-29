@@ -11,6 +11,7 @@ UBaamAttributeSet::UBaamAttributeSet()
 	InitWeaponRange(1.f);
 	InitDistanceReduction(0.f);
 	InitDistanceIncrease(0.f);
+	InitCardUseLimit(2.f);   // GDD §7.1 초기값
 	InitBangLimit(1.f);
 	InitMissedRequired(1.f);
 	InitDrawCount(2.f);
@@ -33,6 +34,7 @@ void UBaamAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeaponRange,       COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DistanceReduction, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DistanceIncrease,  COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, CardUseLimit,      COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, BangLimit,         COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, MissedRequired,    COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DrawCount,         COND_None, REPNOTIFY_Always);
@@ -109,6 +111,10 @@ void UBaamAttributeSet::OnRep_DistanceReduction(const FGameplayAttributeData& Ol
 void UBaamAttributeSet::OnRep_DistanceIncrease(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, DistanceIncrease, OldValue);
+}
+void UBaamAttributeSet::OnRep_CardUseLimit(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, CardUseLimit, OldValue);
 }
 void UBaamAttributeSet::OnRep_BangLimit(const FGameplayAttributeData& OldValue)
 {

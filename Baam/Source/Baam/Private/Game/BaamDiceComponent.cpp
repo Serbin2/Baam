@@ -1,4 +1,5 @@
 #include "Game/BaamDiceComponent.h"
+#include "Game/BaamGameplayTags.h"
 
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
@@ -124,4 +125,96 @@ FText UBaamDiceComponent::GetOutcomeText(EBaamDiceOutcome Outcome)
 	case EBaamDiceOutcome::CriticalSuccess: return NSLOCTEXT("Bang", "DiceCritSuccess", "대성공");
 	default:                                return FText::GetEmpty();
 	}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+//  카드 데이터 기반 판정 (GDD §4.2)
+//
+//  카드 비율 + 보정 → 정규화 → 누적 구간(대성공 → 성공 → 실패 → 대실패) → 0~99 난수 1회.
+//  판정을 여기 한곳에 모아두면 GA 10 개가 각자 굴리는 중복이 사라지고,
+//  "같은 판정을 한 번만 적용" (GDD §9.2) 을 구조적으로 보장할 수 있다.
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+FBaamOutcomeWeights UBaamDiceComponent::ApplyLuck(const FBaamOutcomeWeights& Base, int32 Luck) const
+{
+	FBaamOutcomeWeights Out = Base;
+	if (Luck != 0)
+	{
+		Out.ApplyBonus(Luck * LuckSuccessWeightPerPoint, Luck * LuckCriticalWeightPerPoint);
+	}
+	return Out;
+}
+
+void UBaamDiceComponent::GetOutcomeChances(const FBaamOutcomeWeights& Weights,
+	float& OutCriticalFailure, float& OutFailure, float& OutSuccess, float& OutCriticalSuccess)
+{
+	OutCriticalFailure = OutFailure = OutSuccess = OutCriticalSuccess = 0.f;
+
+	const int32 Total = Weights.Sum();
+	if (Total <= 0)
+	{
+		return;
+	}
+
+	const float Inv = 100.f / static_cast<float>(Total);
+	OutCriticalFailure = Weights.CriticalFailure * Inv;
+	OutFailure         = Weights.Failure         * Inv;
+	OutSuccess         = Weights.Success         * Inv;
+	OutCriticalSuccess = Weights.CriticalSuccess * Inv;
+}
+
+EBaamDiceOutcome UBaamDiceComponent::RollOutcome(const FBaamOutcomeWeights& Weights, int32& OutRoll)
+{
+	OutRoll = INDEX_NONE;
+
+	const int32 Total = Weights.Sum();
+	if (Total <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Dice] 판정 비율 합이 0 — 실패로 처리합니다(카드 데이터 확인)."));
+		return EBaamDiceOutcome::Failure;
+	}
+
+	if (!bStreamInitialized)
+	{
+		// InitializeStream 전에 굴리면 매 판 같은 수열이 나온다 — 초기화 누락을 알린다.
+		UE_LOG(LogTemp, Warning, TEXT("[Dice] RollOutcome: 스트림이 초기화되지 않았습니다."));
+	}
+
+	//	0 ~ Total-1 에서 뽑아 누적 구간에 대응시킨다.
+	//	0~99 로 고정하지 않는 이유: Total 이 100 이 아닐 때 정규화 반올림으로 확률이 미세하게
+	//	틀어지는 것을 피하기 위함이다. 비율 그대로가 곧 확률이 된다.
+	const int32 Pick = RandomStream.RandRange(0, Total - 1);
+	OutRoll = (Total == 100) ? Pick : FMath::FloorToInt(Pick * 100.f / Total);   // 표시용 0~99 환산
+
+	int32 Cumulative = Weights.CriticalSuccess;
+	if (Pick < Cumulative) { return EBaamDiceOutcome::CriticalSuccess; }
+
+	Cumulative += Weights.Success;
+	if (Pick < Cumulative) { return EBaamDiceOutcome::Success; }
+
+	Cumulative += Weights.Failure;
+	if (Pick < Cumulative) { return EBaamDiceOutcome::Failure; }
+
+	return EBaamDiceOutcome::CriticalFailure;
+}
+
+FGameplayTag UBaamDiceComponent::OutcomeToTag(EBaamDiceOutcome Outcome)
+{
+	switch (Outcome)
+	{
+	case EBaamDiceOutcome::CriticalSuccess: return Bang::Resolution::CriticalSuccess.GetTag();
+	case EBaamDiceOutcome::Success:         return Bang::Resolution::Success.GetTag();
+	case EBaamDiceOutcome::Failure:         return Bang::Resolution::Failure.GetTag();
+	case EBaamDiceOutcome::CriticalFailure: return Bang::Resolution::CriticalFailure.GetTag();
+	default:                                return FGameplayTag();
+	}
+}
+
+EBaamDiceOutcome UBaamDiceComponent::TagsToOutcome(const FGameplayTagContainer& Tags, EBaamDiceOutcome Fallback)
+{
+	if (Tags.HasTagExact(Bang::Resolution::CriticalSuccess.GetTag())) { return EBaamDiceOutcome::CriticalSuccess; }
+	if (Tags.HasTagExact(Bang::Resolution::Success.GetTag()))         { return EBaamDiceOutcome::Success; }
+	if (Tags.HasTagExact(Bang::Resolution::Failure.GetTag()))         { return EBaamDiceOutcome::Failure; }
+	if (Tags.HasTagExact(Bang::Resolution::CriticalFailure.GetTag())) { return EBaamDiceOutcome::CriticalFailure; }
+	return Fallback;
 }

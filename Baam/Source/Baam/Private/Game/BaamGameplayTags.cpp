@@ -97,6 +97,14 @@ namespace Bang
 		}
 	}
 
+	namespace Resolution
+	{
+		UE_DEFINE_GAMEPLAY_TAG(CriticalFailure, "Resolution.CriticalFailure")
+		UE_DEFINE_GAMEPLAY_TAG(Failure,         "Resolution.Failure")
+		UE_DEFINE_GAMEPLAY_TAG(Success,         "Resolution.Success")
+		UE_DEFINE_GAMEPLAY_TAG(CriticalSuccess, "Resolution.CriticalSuccess")
+	}
+
 	namespace Role
 	{
 		UE_DEFINE_GAMEPLAY_TAG(Sheriff,  "Role.Sheriff")

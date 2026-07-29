@@ -17,6 +17,7 @@ class UTextBlock;
  *   Text_Status    (TextBlock, 선택 — "내 차례" 등 안내문)
  *   Text_HandLimit (TextBlock, 선택 — "손패 5 / 한도 4")
  *   Text_Deck      (TextBlock, 선택 — 남은 덱 장수)
+ *   Text_CardUse   (TextBlock, 선택 — "카드 1 / 2")
  *
  * ── 게임 로직과의 연결 지점 ──
  *   들어오는 방향: SetTurnView()      — PlayerController 가 주기적으로 밀어넣는다
@@ -66,6 +67,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Text_Deck;
+
+	/** "카드 1 / 2" — GDD §10 이 요구하는 사용한 카드 수 / 한도 표시. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> Text_CardUse;
 
 private:
 	void RefreshVisual();

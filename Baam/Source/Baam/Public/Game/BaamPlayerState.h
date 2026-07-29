@@ -59,6 +59,18 @@ public:
 	//	장착 중인 파란 카드. 공개 정보라 전원에게 복제된다.
 	const TArray<FBaamCardInstance>& GetEquipment() const { return Equipment; }
 
+	// ── 턴당 카드 사용 (GDD §5.2 / §7.1) ──
+	//
+	// 한도는 어트리뷰트 CardUseLimit 이 갖고, "이번 턴에 몇 장 썼는가" 만 여기서 센다.
+	// 턴 시작(BeginTurn)에 0 으로 초기화된다.
+	//   ⚠️ 버리기는 카드 사용이 아니다 — Discard 페이즈에서는 증가시키지 않는다.
+	UFUNCTION(BlueprintPure, Category = "Baam|Player")
+	int32 GetCardsUsedThisTurn() const { return CardsUsedThisTurn; }
+
+	//	서버 전용.
+	void ResetCardsUsedThisTurn();
+	void IncrementCardsUsedThisTurn();
+
 	// ── 역할 공개 ──
 	//
 	// 진짜 역할은 ABaamCharacter::CharacterTag 에 있고 COND_OwnerOnly 로 본인에게만 간다.
@@ -114,5 +126,8 @@ private:
 
 	UPROPERTY(Replicated)
 	FGameplayTag PublicRoleTag;            // 전원 공개 (공개된 역할만)
+
+	UPROPERTY(Replicated)
+	int32 CardsUsedThisTurn = 0;           // 전원 공개 (턴 UI 표시용)
 
 };

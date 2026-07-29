@@ -322,6 +322,9 @@ void ABaamPlayerController::Baam_DumpTurn()
 	{
 		UE_LOG(LogBaamCard, Log, TEXT("  손패 %d 장 / 한도 %d (한도 = 현재 Health)"),
 			PS->GetHandCount(), GS->GetHandLimitForSeat(MySeat));
+		UE_LOG(LogBaamCard, Log, TEXT("  카드 사용 %d / %d  (남음 : %s)"),
+			PS->GetCardsUsedThisTurn(), GS->GetCardUseLimitForSeat(MySeat),
+			GS->HasCardUsesLeft(MySeat) ? TEXT("예") : TEXT("아니오"));
 	}
 
 	const TArray<int32> Alive = GS->GetAliveSeatsInTableOrder();
