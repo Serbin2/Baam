@@ -44,6 +44,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bang")
 	void SetCharacterTag(const FGameplayTag& NewTag);
 
+	/**
+	 * 서버 전용. Health 가 0 이 되었음을 AttributeSet 이 알려온다.
+	 * 값 판정은 AttributeSet 이, 사망이라는 "규칙 사건" 은 여기서부터 처리한다.
+	 * 이미 죽었으면 무시한다(회복→재사망 중복 방지).
+	 *
+	 * Killer : 피해 GE 의 Instigator. 보상/벌칙 판정에 쓴다. 없을 수 있다.
+	 */
+	void NotifyHealthDepleted(AActor* Killer);
+
+	UFUNCTION(BlueprintPure, Category = "Bang")
+	bool IsDead() const { return bDead; }
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -67,6 +79,9 @@ protected:
 	// 서버 전용: 최초 GAS 부여. 중복 방지 플래그.
 	void ServerInitGAS();
 	bool bGASInitialized = false;
+
+	// 서버 전용. 사망 1회 처리 보장.
+	bool bDead = false;
 
 	// DataSubsystem 에서 RowTag 로 Row 를 찾아 DefaultAttributeGE/PassiveEffects/GrantedAbilities 부여.
 	void ApplyCharacterDataRow(const FGameplayTag& RowTag);

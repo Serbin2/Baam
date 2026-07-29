@@ -148,6 +148,16 @@ void ABaamGameMode::AssignRoles()
 		const FGameplayTag RoleTag = Pool[i];
 		Char->SetCharacterTag(RoleTag);
 
+		// 보안관만 공개 역할이다. 나머지는 사망하거나 판이 끝날 때까지 감춘다.
+		// (CharacterTag 자체는 COND_OwnerOnly 라 본인 외에는 복제되지 않는다)
+		if (ABaamPlayerState* PS = PC->GetPlayerState<ABaamPlayerState>())
+		{
+			if (RoleTag == Bang::Role::Sheriff.GetTag())
+			{
+				PS->SetPublicRole(RoleTag);
+			}
+		}
+
 		UE_LOG(LogTemp, Log, TEXT("[Bang] AssignRoles: %s → %s"),
 			*PC->GetName(), *RoleTag.ToString());
 	}

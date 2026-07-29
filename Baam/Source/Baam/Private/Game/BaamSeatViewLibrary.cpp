@@ -10,6 +10,7 @@
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamGameDataTypes.h"
 #include "Game/BaamGameplayTags.h"
+#include "Game/BaamGameState.h"
 #include "Game/BaamPlayerState.h"
 #include "Player/Component/BaamAttributeSet.h"
 
@@ -48,23 +49,34 @@ namespace
 		return PS ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PS->GetPawn()) : nullptr;
 	}
 
-	/** 살아 있는 좌석만 좌석 번호 순으로. 거리 계산의 기준 원이다. */
+	FString RoleDisplayName(const FGameplayTag& Role)
+	{
+		if (Role == Bang::Role::Sheriff.GetTag())  { return TEXT("보안관"); }
+		if (Role == Bang::Role::Deputy.GetTag())   { return TEXT("부관"); }
+		if (Role == Bang::Role::Outlaw.GetTag())   { return TEXT("무법자"); }
+		if (Role == Bang::Role::Renegade.GetTag()) { return TEXT("배신자"); }
+		return Role.IsValid() ? Role.ToString() : FString();
+	}
+
+	ABaamGameState* GetBaamGameState(const APlayerController* Viewer)
+	{
+		const UWorld* World = Viewer ? Viewer->GetWorld() : nullptr;
+		return World ? World->GetGameState<ABaamGameState>() : nullptr;
+	}
+
+	/**
+	 * 살아 있는 좌석만 좌석 번호 순으로. 거리 계산의 기준 원이다.
+	 *
+	 * ⚠️ "살아 있다" 의 판정은 ABaamGameState 한곳에만 둔다. 여기서 따로 계산하면
+	 *    UI 는 살아 있다고 보는데 턴 진행은 건너뛰는 식으로 조용히 어긋난다.
+	 */
 	void CollectAliveSeats(const APlayerController* Viewer, TArray<int32>& OutSeats)
 	{
 		OutSeats.Reset();
 
-		TArray<ABaamPlayerState*> States;
-		CollectSeatedPlayerStates(Viewer, States);
-
-		for (const ABaamPlayerState* PS : States)
+		if (const ABaamGameState* GS = GetBaamGameState(Viewer))
 		{
-			const UAbilitySystemComponent* ASC = GetSeatASC(PS);
-			//	ASC 를 아직 못 찾았으면(폰 스폰 전) 살아 있는 것으로 본다.
-			const bool bAlive = !ASC || ASC->GetNumericAttribute(UBaamAttributeSet::GetHealthAttribute()) > 0.f;
-			if (bAlive)
-			{
-				OutSeats.Add(PS->GetSeatIndex());
-			}
+			OutSeats = GS->GetAliveSeatsInTableOrder();
 		}
 	}
 }
@@ -134,6 +146,9 @@ TArray<FBangSeatView> UBaamSeatViewLibrary::MakeSeatViews(const APlayerControlle
 	const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
 	const UBaamDataSubsystem* Data = GI ? GI->GetSubsystem<UBaamDataSubsystem>() : nullptr;
 
+	const ABaamGameState* GS = GetBaamGameState(Viewer);
+	const int32 CurrentSeat = GS ? GS->GetCurrentSeat() : INDEX_NONE;
+
 	Views.Reserve(States.Num());
 
 	for (const ABaamPlayerState* PS : States)
@@ -148,13 +163,10 @@ TArray<FBangSeatView> UBaamSeatViewLibrary::MakeSeatViews(const APlayerControlle
 		{
 			View.Health    = FMath::RoundToInt(ASC->GetNumericAttribute(UBaamAttributeSet::GetHealthAttribute()));
 			View.MaxHealth = FMath::RoundToInt(ASC->GetNumericAttribute(UBaamAttributeSet::GetMaxHealthAttribute()));
-			View.bIsAlive  = View.Health > 0 && !ASC->HasMatchingGameplayTag(Bang::State::Dead.GetTag());
 		}
-		else
-		{
-			//	폰이 아직 스폰되지 않았다. 살아 있는 것으로 두고 HP 는 0/0 으로 표시한다.
-			View.bIsAlive = true;
-		}
+
+		//	생사 판정도 GameState 한곳에서만 한다(턴 진행과 어긋나면 안 된다).
+		View.bIsAlive = GS ? GS->IsSeatAlive(View.SeatIndex) : true;
 
 		//	파란 카드(장비)는 공개 정보다.
 		for (const FBaamCardInstance& Equip : PS->GetEquipment())
@@ -163,15 +175,24 @@ TArray<FBangSeatView> UBaamSeatViewLibrary::MakeSeatViews(const APlayerControlle
 			View.EquipmentNames.Add(Row ? Row->DisplayName : FText::FromName(Equip.CardId));
 		}
 
-		//	TODO(STEP 6): 역할 공개 규칙. 보안관은 항상 공개, 나머지는 사망 시 공개.
-		//	현재 ABaamCharacter::CharacterTag 가 전원에게 복제되고 있어 데이터상으로는 이미
-		//	모두에게 보인다 — UI 에서만 가리는 것이라 진짜 은닉이 아니다.
-		View.RoleName = FText::GetEmpty();
+		//	⚠️ 반드시 PublicRoleTag 를 본다. GetSeatRole() 은 서버 권위 진짜 역할이라
+		//	   리슨서버 호스트 화면에서는 전원의 역할이 그대로 노출된다.
+		//	   공개 여부 판정은 서버가 이미 끝냈고(보안관 / 사망자 / 판 종료) UI 는 결과만 쓴다.
+		FGameplayTag VisibleRole = PS->GetPublicRole();
+
+		//	본인은 자기 역할을 안다 — CharacterTag 가 COND_OwnerOnly 로 자기에게만 온다.
+		if (!VisibleRole.IsValid() && View.bIsLocalPlayer && GS)
+		{
+			VisibleRole = GS->GetSeatRole(View.SeatIndex);
+		}
+
+		View.RoleName = VisibleRole.IsValid()
+			? FText::FromString(RoleDisplayName(VisibleRole))
+			: FText::GetEmpty();
 
 		View.Distance = GetRingDistance(Viewer, ViewerSeat, View.SeatIndex);
 
-		//	TODO(STEP 8): GameState 의 현재 턴 좌석과 비교해 채운다.
-		View.bIsCurrentTurn = false;
+		View.bIsCurrentTurn = (CurrentSeat != INDEX_NONE && View.SeatIndex == CurrentSeat);
 	}
 
 	return Views;

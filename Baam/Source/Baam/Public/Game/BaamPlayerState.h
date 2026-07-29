@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "GameplayTagContainer.h"
 #include "BaamPlayerState.generated.h"
 
 struct FBaamCardInstance;
@@ -56,6 +57,34 @@ public:
 	//	장착 중인 파란 카드. 공개 정보라 전원에게 복제된다.
 	const TArray<FBaamCardInstance>& GetEquipment() const { return Equipment; }
 
+	// ── 역할 공개 ──
+	//
+	// 진짜 역할은 ABaamCharacter::CharacterTag 에 있고 COND_OwnerOnly 로 본인에게만 간다.
+	// 여기 값은 "공개된 역할" 만 담는다 — 보안관(판 시작 시), 사망자, 판 종료 시 전원.
+	// 비공개면 무효 태그다. UI 는 반드시 이 값을 봐야 한다.
+	UFUNCTION(BlueprintPure, Category = "Baam|Player")
+	FGameplayTag GetPublicRole() const { return PublicRoleTag; }
+
+	//	서버 전용. 역할을 공개 상태로 올린다.
+	void SetPublicRole(const FGameplayTag& InRole);
+
+	// ── 생사 ──
+	//
+	// ⚠️ ASC 의 State.Dead 루즈 태그는 복제되지 않으므로 클라가 볼 수 없다.
+	//    "죽었다" 는 공개 사실이므로 여기에 복제 변수로 둔다.
+	//    (루즈 태그는 서버에서 GA 의 ActivationBlockedTags 를 막는 용도로만 쓴다)
+	UFUNCTION(BlueprintPure, Category = "Baam|Player")
+	bool IsDead() const { return bIsDead; }
+
+	//	서버 전용. 사망 확정 시 한 번만 호출된다.
+	void SetDead(bool bInDead);
+
+	/**
+	 * 서버 전용. 손패와 장비를 전부 비우고 그 카드들을 돌려준다(사망 처리용).
+	 * 호출자가 버린 패로 보내야 한다.
+	 */
+	void TakeAllCards(TArray<FBaamCardInstance>& OutCards);
+
 private:
 	//	소유 클라에 Hand 가 복제되면 호출된다.
 	//	TODO(3.2): 여기서 OnHandChanged 를 브로드캐스트해 손패 UI 를 갱신한다.
@@ -71,7 +100,13 @@ private:
 	TArray<FBaamCardInstance> Hand;       // COND_OwnerOnly
 	UPROPERTY(Replicated)                   
 	int32 HandCount = 0;                   // 전원 공개
-	UPROPERTY(Replicated)                   
+	UPROPERTY(Replicated)
 	TArray<FBaamCardInstance> Equipment;   // 전원 공개 (파란 카드)
+
+	UPROPERTY(Replicated)
+	bool bIsDead = false;                  // 전원 공개
+
+	UPROPERTY(Replicated)
+	FGameplayTag PublicRoleTag;            // 전원 공개 (공개된 역할만)
 
 };

@@ -10,6 +10,7 @@
 #include "Game/BaamCardViewLibrary.h"
 #include "Game/BaamDataSubsystem.h"           // GetCardRow
 #include "Game/BaamGameDataTypes.h"           // FBaamCardRow
+#include "Game/BaamGameState.h"               // PushToDiscard
 #include "Game/BaamPlayerState.h"
 #include "Game/BaamSeatViewLibrary.h"
 #include "GameFramework/GameStateBase.h"      // PlayerArray
@@ -74,6 +75,14 @@ void ABaamPlayerController::HandleCardPlayRequested(const FBangCardView& Card)
 	if (SeatBoardWidget && SeatBoardWidget->IsSelectingTarget())
 	{
 		UE_LOG(LogBaamCard, Verbose, TEXT("[PC] 대상 선택 진행 중 — 카드 %d 요청 무시"), Card.InstanceId);
+		return;
+	}
+
+	//	Discard 페이즈에서는 중앙 드롭이 "사용" 이 아니라 "버리기" 다.
+	//	기존 드래그 UI 를 그대로 재사용하므로 버리기 전용 위젯이 필요 없다.
+	if (IsMyTurnToDiscard())
+	{
+		ServerRequestDiscardCard(Card.InstanceId);
 		return;
 	}
 
@@ -322,11 +331,38 @@ void ABaamPlayerController::ServerRequestPlayCard_Implementation(int32 InstanceI
 	HandlePlayCard(InstanceId, TargetSeat);
 }
 
+// 턴 검증 우회 — GA 를 단독으로 테스트할 때만 켠다. 0 이면 정상 규칙 적용.
+static int32 GBangIgnoreTurnOrder = 0;
+static FAutoConsoleVariableRef CVarBangIgnoreTurnOrder(
+	TEXT("Bang.IgnoreTurnOrder"),
+	GBangIgnoreTurnOrder,
+	TEXT("1 이면 턴/페이즈 검증을 건너뛴다(GA 단독 테스트용). 기본 0."),
+	ECVF_Default);
+
 void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 {
-	// TODO(2단계): GameState 규칙 검증 — 내 턴? Phase.Play? 사거리? BangLimit?
 	UE_LOG(LogTemp, Log, TEXT("[Bang] ServerRequestPlayCard 수신 — PC=%s Instance=%d TargetSeat=%d"),
 		*GetName(), InstanceId, TargetSeat);
+
+	// ── 턴/페이즈 검증 ──
+	// 클라의 UI 표시는 힌트일 뿐이므로 서버가 반드시 다시 본다.
+	// TODO: 사거리(WeaponRange vs 거리)·턴당 BANG 한도(BangLimit)는 아직 없다.
+	{
+		const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+		const int32 MySeat = GetMySeatIndex();
+
+		if (GBangIgnoreTurnOrder == 0 && (!GS || !GS->CanSeatPlayCards(MySeat)))
+		{
+			BaamDebug::Screen(
+				FString::Printf(TEXT("[서버] 지금은 좌석 %d 의 차례가 아닙니다 (현재 %d / %s). 카드 #%d 거부."),
+					MySeat,
+					GS ? GS->GetCurrentSeat() : INDEX_NONE,
+					GS ? *GS->GetPhaseTag().ToString() : TEXT("-"),
+					InstanceId),
+				FColor::Orange, /*Time=*/5.f);
+			return;
+		}
+	}
 
 	// 시전자의 ASC 를 얻는다 (현재 ASC 는 캐릭터 소유).
 	UAbilitySystemComponent* ASC =
@@ -417,7 +453,111 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 
 	// 카드 주도 발동 (md §1.1): 서버 권위로 즉석 부여+1회 발동. 페이로드가 GA 의 TriggerEventData 로 전달된다.
 	FGameplayAbilitySpec Spec(AbilityClass, /*Level=*/1, /*InputID=*/INDEX_NONE, /*SourceObject=*/this);
-	ASC->GiveAbilityAndActivateOnce(Spec, &Payload);
+	const FGameplayAbilitySpecHandle ActivatedHandle = ASC->GiveAbilityAndActivateOnce(Spec, &Payload);
+
+	// GiveAbilityAndActivateOnce 는 발동에 실패하면 ClearAbility 후 무효 핸들을 돌려준다
+	// (AbilitySystemComponent_Abilities.cpp: InternalTryActivateAbility 실패 분기).
+	// 즉 핸들 유효성이 곧 "발동 성공" 이다. 실패한 카드는 소비하지 않는다 —
+	// GA 매핑 오류나 ActivationBlockedTags(State.Dead 등)로 카드가 조용히 사라지면 추적이 어렵다.
+	if (!ActivatedHandle.IsValid())
+	{
+		BaamDebug::Screen(
+			FString::Printf(TEXT("[서버] %s 발동 실패 — 카드 #%d 는 손패에 그대로 둡니다."),
+				*AbilityClass->GetName(), InstanceId),
+			FColor::Red, /*Time=*/8.f);
+		return;
+	}
+
+	// 뱅 규칙: 낸 카드는 결과와 무관하게 버린 패로 간다.
+	// (뱅!이 빗나가도 그 뱅! 카드는 돌아오지 않는다)
+	ConsumeCard(InstanceId);
+}
+
+// ======================================================================================
+//  턴
+// ======================================================================================
+
+int32 ABaamPlayerController::GetMySeatIndex() const
+{
+	const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>();
+	return PS ? PS->GetSeatIndex() : INDEX_NONE;
+}
+
+bool ABaamPlayerController::IsMyTurnToPlay() const
+{
+	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	return GS && GS->CanSeatPlayCards(GetMySeatIndex());
+}
+
+bool ABaamPlayerController::IsMyTurnToDiscard() const
+{
+	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	return GS && GS->CanSeatDiscard(GetMySeatIndex());
+}
+
+void ABaamPlayerController::RequestEndTurn()
+{
+	ServerRequestEndTurn();
+}
+
+void ABaamPlayerController::ServerRequestEndTurn_Implementation()
+{
+	if (ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr)
+	{
+		//	좌석은 서버가 가진 PlayerState 에서 읽는다 — 클라가 보낸 값을 믿지 않는다.
+		GS->RequestEndTurn(GetMySeatIndex());
+	}
+}
+
+bool ABaamPlayerController::ServerRequestDiscardCard_Validate(int32 InstanceId)
+{
+	return InstanceId != INDEX_NONE;
+}
+
+void ABaamPlayerController::ServerRequestDiscardCard_Implementation(int32 InstanceId)
+{
+	ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	const int32 MySeat = GetMySeatIndex();
+
+	//	Discard 페이즈 + 자기 턴에서만 허용. 아니면 손패를 마음대로 버릴 수 있게 된다.
+	if (!GS || !GS->CanSeatDiscard(MySeat))
+	{
+		BaamDebug::Screen(TEXT("[서버] 지금은 버리기 페이즈가 아닙니다."), FColor::Red, 5.f);
+		return;
+	}
+
+	ConsumeCard(InstanceId);
+	GS->NotifyCardDiscarded(MySeat);
+}
+
+void ABaamPlayerController::ConsumeCard(int32 InstanceId)
+{
+	ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>();
+	if (!PS)
+	{
+		return;
+	}
+
+	// 손패 변경은 반드시 이 함수를 거친다 — HandCount 동기화와 OnHandChanged 통지가 여기 있다.
+	FBaamCardInstance Removed;
+	if (!PS->RemoveCardFromHand(InstanceId, Removed))
+	{
+		// 발동 직전에 손패에서 찾아 검증했으므로 여기 걸리면 다른 경로가 손패를 건드린 것이다.
+		UE_LOG(LogBaamCard, Warning,
+			TEXT("[Bang] ConsumeCard: Instance=%d 를 손패에서 찾지 못했습니다 (이미 제거됨?)."), InstanceId);
+		return;
+	}
+
+	// 버린 패로. DiscardTop 갱신과 DeckCount/DiscardCount 재계산이 함께 처리된다.
+	if (ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr)
+	{
+		GS->PushToDiscard(Removed);
+	}
+
+	BaamDebug::Screen(
+		FString::Printf(TEXT("[서버] 카드 소비  %s #%d → 버린 패  (남은 손패 %d 장)"),
+			*Removed.CardId.ToString(), Removed.InstanceId, PS->GetHandCount()),
+		FColor(150, 200, 150), /*Time=*/5.f);
 }
 
 AActor* ABaamPlayerController::ResolveTargetActor(int32 TargetSeat) const

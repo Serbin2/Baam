@@ -23,6 +23,10 @@
 // TSubclassOf<UGameplayEffect> 를 bool 로 평가하면 UGameplayEffect::StaticClass() 가 필요하므로
 // 완전한 타입이 있어야 한다.
 #include "GameplayEffect.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Game/BaamGameplayTags.h"
+#include "Player/Effect/GE_Damage.h"
 
 void ABaamGameMode::Baam_DumpDeck()
 {
@@ -281,4 +285,91 @@ void ABaamPlayerController::Baam_DumpHand()
 			bIsServer ? TEXT("  (서버라 정상)") : TEXT(""));
 	}
 #endif // !UE_BUILD_SHIPPING
+}
+
+// ======================================================================================
+//  턴 — 조회는 창마다 자기 기준이므로 PlayerController 에 둔다.
+// ======================================================================================
+
+void ABaamPlayerController::Baam_EndTurn()
+{
+#if !UE_BUILD_SHIPPING
+	RequestEndTurn();
+#endif
+}
+
+void ABaamPlayerController::Baam_DumpTurn()
+{
+#if !UE_BUILD_SHIPPING
+	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
+	if (!GS)
+	{
+		UE_LOG(LogBaamCard, Warning, TEXT("[Exec] ABaamGameState 없음"));
+		return;
+	}
+
+	const int32 MySeat = GetMySeatIndex();
+
+	UE_LOG(LogBaamCard, Log, TEXT("===== Baam_DumpTurn ====="));
+	UE_LOG(LogBaamCard, Log, TEXT("  현재 턴 좌석 : %d   페이즈 : %s"),
+		GS->GetCurrentSeat(), *GS->GetPhaseTag().ToString());
+	UE_LOG(LogBaamCard, Log, TEXT("  내 좌석 : %d   낼 수 있나 : %s   버려야 하나 : %s"),
+		MySeat,
+		IsMyTurnToPlay()    ? TEXT("예") : TEXT("아니오"),
+		IsMyTurnToDiscard() ? TEXT("예") : TEXT("아니오"));
+
+	if (const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
+	{
+		UE_LOG(LogBaamCard, Log, TEXT("  손패 %d 장 / 한도 %d (한도 = 현재 Health)"),
+			PS->GetHandCount(), GS->GetHandLimitForSeat(MySeat));
+	}
+
+	const TArray<int32> Alive = GS->GetAliveSeatsInTableOrder();
+	FString AliveStr;
+	for (const int32 Seat : Alive)
+	{
+		AliveStr += FString::Printf(TEXT("%d(HP%d) "), Seat, GS->GetSeatHealth(Seat));
+	}
+	UE_LOG(LogBaamCard, Log, TEXT("  살아있는 좌석 : %s"), AliveStr.IsEmpty() ? TEXT("(없음)") : *AliveStr);
+#endif
+}
+
+// ======================================================================================
+//  사망 / 승패 테스트 — 서버 권위이므로 GameMode 에 둔다.
+// ======================================================================================
+
+void ABaamGameMode::Baam_Damage(int32 Seat, int32 Amount)
+{
+#if !UE_BUILD_SHIPPING
+	ABaamGameState* GS = GetGameState<ABaamGameState>();
+	if (!GS)
+	{
+		UE_LOG(LogBaamCard, Warning, TEXT("[Exec] ABaamGameState 없음"));
+		return;
+	}
+
+	const ABaamPlayerState* PS = GS->GetPlayerStateBySeat(Seat);
+	UAbilitySystemComponent* ASC =
+		PS ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PS->GetPawn()) : nullptr;
+	if (!ASC)
+	{
+		UE_LOG(LogBaamCard, Warning, TEXT("[Exec] 좌석 %d 의 ASC 를 찾지 못했습니다."), Seat);
+		return;
+	}
+
+	// exec 는 생략된 인자를 0 으로 넘긴다. 0 이면 즉사시킨다(승패 판정 테스트 편의).
+	const int32 Damage = (Amount > 0) ? Amount : FMath::Max(1, GS->GetSeatHealth(Seat));
+
+	FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+	const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(UGE_Damage::StaticClass(), 1.f, Context);
+	if (Spec.IsValid())
+	{
+		// 피해는 음수로 넣는다(Health 가산 = 감소).
+		Spec.Data->SetSetByCallerMagnitude(Bang::SetByCaller::Damage.GetTag(), -static_cast<float>(Damage));
+		ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
+
+	UE_LOG(LogBaamCard, Log, TEXT("[Exec] 좌석 %d 에 피해 %d — 남은 HP %d"),
+		Seat, Damage, GS->GetSeatHealth(Seat));
+#endif
 }

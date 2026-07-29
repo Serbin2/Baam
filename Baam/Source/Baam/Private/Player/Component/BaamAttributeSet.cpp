@@ -1,5 +1,6 @@
 #include "Player/Component/BaamAttributeSet.h"
 #include "GameplayEffectExtension.h"
+#include "Player/BaamCharacter.h"
 #include "Net/UnrealNetwork.h"
 
 UBaamAttributeSet::UBaamAttributeSet()
@@ -66,10 +67,26 @@ void UBaamAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 	Super::PostGameplayEffectExecute(Data);
 
 	// GE(피해/회복) 적용 후 Health 를 [0, MaxHealth] 로 최종 클램프.
-	// 사망 판정(Health<=0 → State.Dead)은 캐릭터/룰 계층에서 이 값을 보고 처리한다.
-	if (Data.EvaluatedData.Attribute == GetHealthAttribute())
+	if (Data.EvaluatedData.Attribute != GetHealthAttribute())
 	{
-		SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+		return;
+	}
+
+	SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+
+	if (GetHealth() > 0.f)
+	{
+		return;
+	}
+
+	// AttributeSet 은 "값이 0 이 됐다" 까지만 안다.
+	// 사망이라는 규칙 사건(카드 정리·보상/벌칙·승패·턴)은 캐릭터/룰 계층이 처리한다 —
+	// 여기에 규칙을 넣으면 나중에 ASC 를 PlayerState 로 옮길 때 통째로 끌려다닌다.
+	if (ABaamCharacter* OwnerChar = Cast<ABaamCharacter>(GetOwningActor()))
+	{
+		// 가해자는 피해 GE 의 Instigator (GA_Bang 이 Context.AddInstigator 로 넣는다).
+		AActor* Killer = Data.EffectSpec.GetEffectContext().GetInstigator();
+		OwnerChar->NotifyHealthDepleted(Killer);
 	}
 }
 

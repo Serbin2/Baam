@@ -109,6 +109,10 @@ public:
 	UFUNCTION(Exec)
 	void Baam_DealHand(int32 Count);
 
+	// 좌석에 피해를 준다(사망/승패 테스트용). Amount 생략 시 즉사시킨다.
+	UFUNCTION(Exec)
+	void Baam_Damage(int32 Seat, int32 Amount);
+
 protected:
 	// 판이 시작된 뒤의 접속은 여기서 막는다. 클라의 검색 결과는 캐시라
 	// 시작 직전에 검색한 클라이언트는 bAllowJoinInProgress 검사를 통과해버린다.

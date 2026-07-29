@@ -7,6 +7,7 @@
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamGameDataTypes.h"
 #include "Game/BaamGameplayTags.h"
+#include "Game/BaamGameState.h"
 #include "Game/BaamPlayerState.h"
 
 namespace
@@ -62,9 +63,18 @@ TArray<FBangCardView> UBaamCardViewLibrary::MakeHandViews(const ABaamPlayerState
 	const TArray<FBaamCardInstance>& Hand = PlayerState->GetHand();
 	Views.Reserve(Hand.Num());
 
+	//	자기 차례가 아니면 손패를 회색으로 표시한다(플레이 존이 드롭도 거부한다).
+	//	Discard 페이즈에서도 조작이 필요하므로 두 페이즈 모두 허용한다.
+	//	어디까지나 표시용 힌트이고 최종 판정은 서버가 다시 한다.
+	const UWorld* World = PlayerState->GetWorld();
+	const ABaamGameState* GS = World ? World->GetGameState<ABaamGameState>() : nullptr;
+	const int32 Seat = PlayerState->GetSeatIndex();
+	const bool bCanAct = GS && (GS->CanSeatPlayCards(Seat) || GS->CanSeatDiscard(Seat));
+
 	for (const FBaamCardInstance& Card : Hand)
 	{
-		Views.Add(MakeCardView(PlayerState, Card));
+		FBangCardView& View = Views.Add_GetRef(MakeCardView(PlayerState, Card));
+		View.bPlayable = View.bPlayable && bCanAct;
 	}
 
 	return Views;

@@ -18,6 +18,42 @@ void ABaamPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ABaamPlayerState, SeatIndex);
 	DOREPLIFETIME(ABaamPlayerState, HandCount);
 	DOREPLIFETIME(ABaamPlayerState, Equipment);
+	DOREPLIFETIME(ABaamPlayerState, bIsDead);
+	DOREPLIFETIME(ABaamPlayerState, PublicRoleTag);
+}
+
+void ABaamPlayerState::SetPublicRole(const FGameplayTag& InRole)
+{
+	if (HasAuthority())
+	{
+		PublicRoleTag = InRole;
+	}
+}
+
+void ABaamPlayerState::SetDead(bool bInDead)
+{
+	if (HasAuthority())
+	{
+		bIsDead = bInDead;
+	}
+}
+
+void ABaamPlayerState::TakeAllCards(TArray<FBaamCardInstance>& OutCards)
+{
+	OutCards.Reset();
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	OutCards.Append(Hand);
+	OutCards.Append(Equipment);
+
+	Hand.Reset();
+	Equipment.Reset();
+	HandCount = 0;
+
+	OnHandChanged.Broadcast();   //	서버(리슨 호스트) 자신의 UI 갱신용
 }
 
 void ABaamPlayerState::SetSeatIndex(int32 InSeat)

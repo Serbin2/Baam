@@ -1,8 +1,13 @@
 #include "Player/BaamCharacter.h"
 #include "Player/Component/BaamAbilitySystemComponent.h"
 #include "Player/Component/BaamAttributeSet.h"
+#include "Game/BaamCardLog.h"
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamGameDataTypes.h"
+#include "Game/BaamGameplayTags.h"
+#include "Game/BaamGameState.h"
+#include "Game/BaamPlayerState.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
 ABaamCharacter::ABaamCharacter()
@@ -26,7 +31,12 @@ UAbilitySystemComponent* ABaamCharacter::GetAbilitySystemComponent() const
 void ABaamCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(ABaamCharacter, CharacterTag);
+
+	// ⚠️ 역할은 뱅의 핵심 은닉 정보다. 조건 없이 복제하면 모든 클라가 모든 역할을 알게 되어
+	//    게임이 성립하지 않는다. 본인에게만 보낸다(폰의 Owner 는 소유 PlayerController).
+	//    공개되어야 하는 역할(보안관 / 사망자 / 판 종료)은 ABaamPlayerState::PublicRoleTag 로
+	//    따로 올린다 — UI 는 반드시 그쪽을 봐야 한다.
+	DOREPLIFETIME_CONDITION(ABaamCharacter, CharacterTag, COND_OwnerOnly);
 }
 
 void ABaamCharacter::PossessedBy(AController* NewController)
@@ -83,6 +93,47 @@ void ABaamCharacter::OnRep_CharacterTag()
 {
 	// 소유 클라: 역할 태그를 로컬 ASC 루즈 태그에 반영 (HUD/능력 조건 검사용).
 	RefreshCharacterLooseTag();
+}
+
+void ABaamCharacter::NotifyHealthDepleted(AActor* Killer)
+{
+	if (!HasAuthority() || bDead)
+	{
+		return;
+	}
+	bDead = true;
+
+	// GA 의 ActivationBlockedTags(State.Dead) 를 걸기 위한 서버 측 태그.
+	// 루즈 태그는 복제되지 않으므로, 클라가 보는 "죽었다" 는 PlayerState::bIsDead 가 담당한다.
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->AddLooseGameplayTag(Bang::State::Dead.GetTag());
+	}
+
+	ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>();
+	if (!PS)
+	{
+		return;
+	}
+	PS->SetDead(true);
+
+	// 죽인 사람의 좌석 (보상/벌칙 판정용). 자살이거나 출처를 모르면 INDEX_NONE.
+	int32 KillerSeat = INDEX_NONE;
+	if (const APawn* KillerPawn = Cast<APawn>(Killer))
+	{
+		if (const ABaamPlayerState* KillerPS = KillerPawn->GetPlayerState<ABaamPlayerState>())
+		{
+			KillerSeat = KillerPS->GetSeatIndex();
+		}
+	}
+
+	UE_LOG(LogBaamCard, Log, TEXT("[Death] 좌석 %d 사망 (가해자 좌석 %d)"), PS->GetSeatIndex(), KillerSeat);
+
+	// 이후 규칙 처리(카드 정리·보상/벌칙·승패·턴)는 룰 계층이 맡는다.
+	if (ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr)
+	{
+		GS->HandleSeatDeath(PS->GetSeatIndex(), KillerSeat);
+	}
 }
 
 void ABaamCharacter::ApplyCharacterDataRow(const FGameplayTag& RowTag)

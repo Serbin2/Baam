@@ -76,6 +76,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bang|Target")
 	void CancelTargetSelection();
 
+	// ── 턴 ───────────────────────────────────────────────────────
+	//
+	// HUD 의 "턴 종료" 버튼이 부른다. 손패가 한도(=현재 Health)를 넘으면 서버가
+	// Discard 페이즈로 보내고, 그동안 카드를 중앙에 놓으면 사용 대신 버리기가 된다.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Turn")
+	void RequestEndTurn();
+
+	/** 지금 내가 카드를 낼 수 있는가 (자기 턴 + Play 페이즈). UI 표시용. */
+	UFUNCTION(BlueprintPure, Category = "Bang|Turn")
+	bool IsMyTurnToPlay() const;
+
+	/** 지금 내가 손패를 버려야 하는가 (자기 턴 + Discard 페이즈). */
+	UFUNCTION(BlueprintPure, Category = "Bang|Turn")
+	bool IsMyTurnToDiscard() const;
+
+	/** 내 좌석 번호. PlayerState 가 없으면 INDEX_NONE. */
+	UFUNCTION(BlueprintPure, Category = "Bang|Turn")
+	int32 GetMySeatIndex() const;
+
 	/** 좌석이 확정됐다. 기본 동작으로 ServerRequestPlayCard 를 보낸다. */
 	UPROPERTY(BlueprintAssignable, Category = "Bang|Target")
 	FOnBangSeatSelected OnTargetSeatSelected;
@@ -89,6 +108,14 @@ public:
 	// 서버 창에서만 호출되어 "각 클라가 자기 손패만 보는지" 를 검증할 수 없다.
 	UFUNCTION(Exec)
 	void Baam_DumpHand();
+
+	// 턴 종료(UI 버튼 없이 테스트할 때). 자기 턴이 아니면 서버가 거부한다.
+	UFUNCTION(Exec)
+	void Baam_EndTurn();
+
+	// 현재 턴/페이즈/손패 한도를 출력한다.
+	UFUNCTION(Exec)
+	void Baam_DumpTurn();
 
 	// 손패 위젯을 현재 PlayerState 의 손패로 다시 그린다. 수동 갱신이 필요할 때 호출.
 	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
@@ -130,6 +157,18 @@ protected:
 
 	// 서버: 검증 통과 후 실제 처리. 카드가 구동할 GA 를 부여+발동한다.
 	void HandlePlayCard(int32 InstanceId, int32 TargetSeat);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestEndTurn();
+
+	// 클라 → 서버. Discard 페이즈에서 손패를 한 장 버린다.
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerRequestDiscardCard(int32 InstanceId);
+
+	// 서버: 사용이 성사된 카드를 손패에서 빼 버린 패로 보낸다.
+	//   뱅 규칙상 낸 카드는 결과와 무관하게 버려진다(뱅!이 빗나가도 카드는 돌아오지 않는다).
+	//   단 GA 발동 자체가 실패하면 호출하지 않는다 — 카드가 조용히 사라지면 추적이 어렵다.
+	void ConsumeCard(int32 InstanceId);
 
 	// 카드 종류(Card.Id.*) → 그 카드가 구동할 GA 매핑.
 	//   ⚠️ 반드시 에디터(BP 컨트롤러 디폴트)에서 채운다. 비어 있으면 카드가 발동되지 않는다:
