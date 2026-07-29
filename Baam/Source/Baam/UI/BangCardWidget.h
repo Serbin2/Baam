@@ -43,6 +43,16 @@ public:
 	void SetBeingDragged(bool bInBeingDragged);
 
 	/**
+	 * 드래그를 잠근다. 대상 좌석 선택을 기다리는 동안 카드를 또 던지는 것을 막는다.
+	 * 잠금은 손패 위젯이 일괄로 건다 — 개별 카드에서 직접 부르지 말 것.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Card")
+	void SetDragLocked(bool bInLocked);
+
+	UFUNCTION(BlueprintPure, Category = "Bang|Card")
+	bool IsDragLocked() const { return bDragLocked; }
+
+	/**
 	 * true 면 드래그 비주얼용 복제본이므로 입력을 받지 않는다.
 	 * 복제본이 다시 드래그를 시작하는 무한 재귀를 막는다.
 	 */
@@ -72,6 +82,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Bang|Card")
 	FLinearColor UnplayableTint = FLinearColor(0.4f, 0.4f, 0.4f, 1.f);
 
+	/** 대상 선택 대기 등으로 손패 전체가 잠긴 상태의 색조. */
+	UPROPERTY(EditAnywhere, Category = "Bang|Card")
+	FLinearColor LockedTint = FLinearColor(0.3f, 0.3f, 0.35f, 1.f);
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> Text_CardName;
 
@@ -88,4 +102,5 @@ private:
 	TWeakObjectPtr<UBangHandWidget> OwningHand;
 
 	bool bBeingDragged = false;
+	bool bDragLocked = false;
 };
