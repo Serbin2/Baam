@@ -51,6 +51,27 @@ struct FBaamSessionSearchResult
 	bool bCanJoin = false;
 };
 
+// 로비 현황 — UI 가 인원/준비 표시와 시작 버튼 활성에 쓴다.
+USTRUCT(BlueprintType)
+struct FBaamLobbyStatus
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Baam|Session")
+	int32 CurrentPlayers = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Baam|Session")
+	int32 ReadyPlayers = 0;
+
+	// 시작에 필요한 최소 인원(서버 설정). 호스트가 아니면 0.
+	UPROPERTY(BlueprintReadOnly, Category = "Baam|Session")
+	int32 RequiredPlayers = 0;
+
+	// 호스트 기준 판 진행 여부. 클라에서는 항상 false.
+	UPROPERTY(BlueprintReadOnly, Category = "Baam|Session")
+	bool bMatchStarted = false;
+};
+
 // 방찾기 검색 필터 — 문자열 필터는 결과 수신 후 클라 측 적용(OSS 쿼리는 부분검색 미지원).
 USTRUCT(BlueprintType)
 struct FBaamSessionSearchFilter

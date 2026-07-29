@@ -1,8 +1,10 @@
 #include "Network/Session/BaamSessionFlow.h"
 #include "Game/BaamGameInstance.h"
 #include "Game/BaamMatchStartComponent.h"
+#include "Game/BaamReadyComponent.h"
 #include "Network/BaamNetLog.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 void UBaamSessionFlow::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -195,33 +197,76 @@ void UBaamSessionFlow::LeaveSession()
 	SetPhase(EBaamSessionPhase::Idle, TEXT("세션 종료"));
 }
 
-void UBaamSessionFlow::StartGame()
+// ── 로비 준비 ──
+UBaamReadyComponent* UBaamSessionFlow::GetLocalReadyComponent() const
 {
-	UBaamGameInstance* GI = GetBaamGameInstance();
-	if (!GI)
+	const UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	return UBaamReadyComponent::Find(PC ? PC->PlayerState : nullptr);
+}
+
+void UBaamSessionFlow::SetLocalReady(bool bReady)
+{
+	UBaamReadyComponent* Ready = GetLocalReadyComponent();
+	if (!Ready)
 	{
-		SetPhase(EBaamSessionPhase::Failed, TEXT("GameInstance 가 UBaamGameInstance 가 아님"));
+		SetPhase(EBaamSessionPhase::Failed, TEXT("아직 방에 들어가지 않았습니다"));
 		return;
 	}
+	Ready->RequestSetReady(bReady);
+}
 
+bool UBaamSessionFlow::IsLocalReady() const
+{
+	const UBaamReadyComponent* Ready = GetLocalReadyComponent();
+	return Ready && Ready->IsReady();
+}
+
+FBaamLobbyStatus UBaamSessionFlow::GetLobbyStatus() const
+{
+	FBaamLobbyStatus Status;
+	UBaamReadyComponent::CountLobby(GetWorld(), Status.CurrentPlayers, Status.ReadyPlayers);
+
+	// MatchStart 는 서버에만 있다 — 클라에서는 인원/준비 수만 채워진다.
+	if (const UBaamMatchStartComponent* Match = UBaamMatchStartComponent::Find(GetWorld()))
+	{
+		Status.RequiredPlayers = Match->GetMinStartPlayers();
+		Status.bMatchStarted = Match->IsMatchStarted();
+	}
+	return Status;
+}
+
+bool UBaamSessionFlow::CanStartGame(FString& OutReason) const
+{
 	if (!IsHost())
 	{
-		SetPhase(EBaamSessionPhase::Failed, TEXT("호스트만 게임을 시작할 수 있습니다"));
-		return;
+		OutReason = TEXT("호스트만 시작할 수 있습니다");
+		return false;
 	}
 
-	// 맵 이동 없이 제자리에서 시작한다(Prototype-Workflow.md §1.4).
-	// 난입 차단은 StartMatch 안에서 처리된다.
-	UBaamMatchStartComponent* Match = UBaamMatchStartComponent::Find(GetWorld());
+	const UBaamMatchStartComponent* Match = UBaamMatchStartComponent::Find(GetWorld());
 	if (!Match)
 	{
-		SetPhase(EBaamSessionPhase::Failed, TEXT("게임모드에 MatchStart 컴포넌트가 없습니다"));
+		OutReason = TEXT("게임모드에 MatchStart 컴포넌트가 없습니다");
+		return false;
+	}
+	return Match->CanStartMatch(OutReason);
+}
+
+void UBaamSessionFlow::StartGame()
+{
+	FString Reason;
+	if (!CanStartGame(Reason))
+	{
+		SetPhase(EBaamSessionPhase::Failed, Reason);
 		return;
 	}
 
-	if (!Match->StartMatch())
+	// 맵 이동 없이 제자리에서 시작한다. 난입 차단은 StartMatch 안에서 처리된다.
+	UBaamMatchStartComponent* Match = UBaamMatchStartComponent::Find(GetWorld());
+	if (!Match || !Match->StartMatch())
 	{
-		SetPhase(EBaamSessionPhase::Failed, TEXT("판 시작 실패 — 인원 확인"));
+		SetPhase(EBaamSessionPhase::Failed, TEXT("판 시작 실패"));
 		return;
 	}
 

@@ -2,7 +2,7 @@
 #include "Player/Effect/GE_Damage.h"
 #include "Player/Component/BaamAttributeSet.h"
 #include "Game/BaamGameplayTags.h"
-#include "Game/BaamGameMode.h"
+#include "Game/BaamDiceComponent.h"
 #include "Game/BaamDebug.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
@@ -43,10 +43,10 @@ void UGA_Bang::ActivateAbility(
 	const UBaamAttributeSet* SourceAS = SourceASC ? SourceASC->GetSet<UBaamAttributeSet>() : nullptr;
 	AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
 
-	ABaamGameMode* GM = Avatar ? Avatar->GetWorld()->GetAuthGameMode<ABaamGameMode>() : nullptr;
-	if (!SourceASC || !SourceAS || !GM)
+	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);
+	if (!SourceASC || !SourceAS || !Dice)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Bang — 서버 컨텍스트 없음(ASC/AS/GameMode). 중단."));
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Bang — 서버 컨텍스트 없음(ASC/AS/Dice). 중단."));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -54,7 +54,7 @@ void UGA_Bang::ActivateAbility(
 	// ── 판정: 행운(Luck)을 굴림 보정으로 넣어 주사위를 굴린다 ──
 	const int32 LuckBonus = FMath::RoundToInt(SourceAS->GetLuck());
 	int32 Roll = 0;
-	const EBaamDiceOutcome Outcome = GM->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/LuckBonus);
+	const EBaamDiceOutcome Outcome = Dice->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/LuckBonus);
 
 	// ── 피해 계산: 등급 기본 피해 × 힘 배율 − 대상 지능 경감 ──
 	const int32 TierBase = TierBaseDamage(Outcome);
@@ -94,7 +94,7 @@ void UGA_Bang::ActivateAbility(
 	BaamDebug::Screen(
 		FString::Printf(TEXT("뱅  %s → [%s] 눈%d(행운%+d)  기본%d ×힘 → 피해 %d  대상:%s"),
 			Avatar ? *Avatar->GetName() : TEXT("?"),
-			*ABaamGameMode::GetOutcomeText(Outcome).ToString(), Roll, LuckBonus, TierBase, FinalDamage,
+			*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(), Roll, LuckBonus, TierBase, FinalDamage,
 			TargetActor ? *TargetActor->GetName() : TEXT("없음")),
 		OutcomeColor, /*Time=*/5.f);
 

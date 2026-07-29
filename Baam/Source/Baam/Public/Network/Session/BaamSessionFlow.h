@@ -10,6 +10,7 @@
 #include "BaamSessionFlow.generated.h"
 
 class UBaamGameInstance;
+class UBaamReadyComponent;
 
 UCLASS(Config = Game)
 class BAAM_API UBaamSessionFlow : public UGameInstanceSubsystem, public IBaamSessionInterface
@@ -37,10 +38,21 @@ public:
 	virtual void LeaveSession() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
+	virtual void SetLocalReady(bool bReady) override;
+
+	UFUNCTION(BlueprintCallable, Category = "Baam|Session")
 	virtual void StartGame() override;
 
 	UFUNCTION(BlueprintPure, Category = "Baam|Session")
 	virtual bool IsHost() const override;
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Session")
+	virtual bool IsLocalReady() const override;
+
+	virtual bool CanStartGame(FString& OutReason) const override;
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Session")
+	virtual FBaamLobbyStatus GetLobbyStatus() const override;
 
 	UFUNCTION(BlueprintPure, Category = "Baam|Session")
 	virtual FString GetRoomCode() const override;
@@ -63,6 +75,10 @@ protected:
 
 private:
 	UBaamGameInstance* GetBaamGameInstance() const;
+
+	// 로컬 플레이어의 준비 컴포넌트. 방에 들어가기 전이면 nullptr.
+	UBaamReadyComponent* GetLocalReadyComponent() const;
+
 	void BindGameInstanceEvents();
 	void UnbindGameInstanceEvents();
 
