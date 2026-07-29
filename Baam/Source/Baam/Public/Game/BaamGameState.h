@@ -12,14 +12,21 @@
 /**
  * 
  */
+class UBaamDiceComponent;
+
 UCLASS()
 class BAAM_API ABaamGameState : public AGameStateBase
 {
 	GENERATED_BODY()
-	
+
 public:
+	ABaamGameState();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	//	확률 판정(주사위) 전담. 어디서든 UBaamDiceComponent::Get(this) 로도 얻을 수 있다.
+	UFUNCTION(BlueprintPure, Category = "Baam|Dice")
+	UBaamDiceComponent* GetDice() const { return Dice; }
 
 	//	서버에서 덱을 구성·셔플한다. 이미 초기화됐으면 아무것도 하지 않는다(시드 보존).
 	//	Seed == 0 이면 새 시드를 뽑아 쓰고, 사용한 값을 로그에 남긴다 — 재현에 필수.
@@ -76,10 +83,16 @@ protected:
 	UPROPERTY(Replicated) 
 	FGameplayTag PhaseTag;          // Phase.* 
 	
+	//	⚠️ 덱 셔플 전용 스트림이다. 주사위 판정은 UBaamDiceComponent 가 별도 스트림을 쓴다
+	//	   (한 스트림을 공유하면 판정 횟수가 셔플 결과를 밀어 재현이 깨진다).
 	UPROPERTY()
 	FRandomStream RandomStream;
 	//	시드 보존을 위해 한번 초기화 하면 다시는 초기화 하지 않는다.
 	//	게임 초기화시에만 false로 되돌릴 것.
 	UPROPERTY()
 	bool bInitialized = false;
+
+	//	확률 판정 전담 컴포넌트. 매치 시드로 InitializeDeck 에서 함께 초기화된다.
+	UPROPERTY(VisibleAnywhere, Category = "Baam|Dice")
+	TObjectPtr<UBaamDiceComponent> Dice;
 };

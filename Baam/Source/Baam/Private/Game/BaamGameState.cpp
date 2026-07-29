@@ -6,7 +6,15 @@
 #include "Engine/GameInstance.h"
 #include "Game/BaamCardLog.h"
 #include "Game/BaamDataSubsystem.h"
+#include "Game/BaamDiceComponent.h"
 #include "Net/UnrealNetwork.h"
+
+ABaamGameState::ABaamGameState()
+{
+	//	확률 판정은 컴포넌트가 맡는다 (GameMode 가 아니라 여기 — 클라도 설정을 읽어야 하고
+	//	시드 난수의 소유자가 GameState 이기 때문).
+	Dice = CreateDefaultSubobject<UBaamDiceComponent>(TEXT("Dice"));
+}
 
 void ABaamGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -62,6 +70,12 @@ void ABaamGameState::InitializeDeck(int32 Seed)
 		}
 	}
 	RandomStream.Initialize(ActualSeed);
+
+	//	판정 스트림도 같은 매치 시드에서 파생시킨다(재현 가능). 수열은 셔플과 분리된다.
+	if (Dice)
+	{
+		Dice->InitializeStream(ActualSeed);
+	}
 
 	Subsystem->BuildDeck(Deck);
 	Discard.Reset();

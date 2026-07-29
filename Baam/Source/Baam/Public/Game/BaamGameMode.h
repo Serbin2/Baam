@@ -10,7 +10,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameplayTagContainer.h"
-#include "Game/BaamGameDataTypes.h"   // EBaamDiceOutcome
+#include "Game/BaamGameDataTypes.h"   // FBaamCardProbabilityRow
 #include "BaamGameMode.generated.h"
 
 class UBaamMatchStartComponent;
@@ -40,42 +40,9 @@ public:
 	void CollectPlayers(TArray<APlayerController*>& OutPlayers) const;
 
 	// ── 주사위 판정 ──────────────────────────────────────────────
-	// 주사위 면 수 (기본 24면체). 에디터/코드에서 변경 가능.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "2"))
-	int32 DiceFaces = 24;
-
-	// 주사위를 굴려 1~Faces 결과를 반환한다 (서버에서 호출). Faces<=0 이면 DiceFaces 사용.
-	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
-	int32 RollDice(int32 Faces = 0);
-
-	// ── 판정 비율 (대실패/실패/성공/대성공) ──────────────────────
-	// 각 단계의 "상대 비율". 합이 1 일 필요 없다(내부에서 정규화). 낮은 눈=대실패 … 높은 눈=대성공.
-	// 예) 5 / 45 / 45 / 5 로 두면 극단이 5% 씩. 정수 주사위라 실제 값은 근사치.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
-	float CriticalFailureRatio = 0.1f;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
-	float FailureRatio = 0.4f;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
-	float SuccessRatio = 0.4f;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Bang|Dice", meta = (ClampMin = "0.0"))
-	float CriticalSuccessRatio = 0.1f;
-
-	// 주어진 주사위 눈을 위 비율 구간으로 판정한다. Faces<=0 이면 DiceFaces 사용.
-	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
-	EBaamDiceOutcome ClassifyRoll(int32 Roll, int32 Faces = 0) const;
-
-	// 주사위를 굴려 판정 결과를 반환한다 (굴린 눈은 OutRoll). 로그도 남긴다.
-	//   RollBonus: 판정에만 더해지는 보정치(행운·민첩 등). OutRoll(원본 눈)은 그대로 두고,
-	//              (OutRoll + RollBonus) 로 구간을 판정한다. 값이 커지면 상위 등급이 잘 뜬다.
-	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
-	EBaamDiceOutcome RollForOutcome(int32& OutRoll, int32 Faces = 0, int32 RollBonus = 0);
-
-	// ★ 판정 결과 → 화면/로그용 텍스트 ("대실패"/"실패"/"성공"/"대성공"). 출력용.
-	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
-	static FText GetOutcomeText(EBaamDiceOutcome Outcome);
+	//  ⚠️ 이사 갔다 → UBaamDiceComponent (ABaamGameState 에 부착).
+	//     GameMode 는 클라에 없어 판정 설정을 클라 UI 가 읽을 수 없고, 시드 난수의 소유자도
+	//     GameState 라 그쪽으로 옮겼다. 호출은 UBaamDiceComponent::Get(this) 로 한다.
 
 	// ── [현재 미사용] 확률 기반 카드 분배 ────────────────────────
 	//

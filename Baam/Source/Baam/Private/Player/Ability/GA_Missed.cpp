@@ -1,7 +1,7 @@
 #include "Player/Ability/GA_Missed.h"
 #include "Player/Component/BaamAttributeSet.h"
 #include "Game/BaamGameplayTags.h"
-#include "Game/BaamGameMode.h"
+#include "Game/BaamDiceComponent.h"
 #include "Game/BaamDebug.h"
 #include "AbilitySystemComponent.h"
 
@@ -31,11 +31,11 @@ void UGA_Missed::ActivateAbility(
 	UAbilitySystemComponent* SourceASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
 	const UBaamAttributeSet* SourceAS = SourceASC ? SourceASC->GetSet<UBaamAttributeSet>() : nullptr;
 	AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
-	ABaamGameMode* GM = Avatar ? Avatar->GetWorld()->GetAuthGameMode<ABaamGameMode>() : nullptr;
+	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);
 
-	if (!SourceAS || !GM)
+	if (!SourceAS || !Dice)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Missed — 서버 컨텍스트 없음(AS/GameMode). 중단."));
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Missed — 서버 컨텍스트 없음(AS/Dice). 중단."));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -43,7 +43,7 @@ void UGA_Missed::ActivateAbility(
 	// 회피는 행운 + 민첩 을 굴림 보정으로 넣는다.
 	const int32 DodgeBonus = FMath::RoundToInt(SourceAS->GetLuck() + SourceAS->GetAgility());
 	int32 Roll = 0;
-	const EBaamDiceOutcome Outcome = GM->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/DodgeBonus);
+	const EBaamDiceOutcome Outcome = Dice->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/DodgeBonus);
 
 	// 회피는 성공/실패로만 압축: 성공·대성공 → 회피 성공.
 	const bool bDodged =
@@ -55,7 +55,7 @@ void UGA_Missed::ActivateAbility(
 		FString::Printf(TEXT("회피  %s → %s  (판정 %s, 눈%d, 행운+민첩%+d)"),
 			Avatar ? *Avatar->GetName() : TEXT("?"),
 			bDodged ? TEXT("성공") : TEXT("실패"),
-			*ABaamGameMode::GetOutcomeText(Outcome).ToString(), Roll, DodgeBonus),
+			*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(), Roll, DodgeBonus),
 		bDodged ? FColor::Cyan : FColor::Red, /*Time=*/5.f);
 
 	OnDodgeResolved(bDodged);
