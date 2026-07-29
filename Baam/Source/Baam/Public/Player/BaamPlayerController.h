@@ -156,11 +156,24 @@ protected:
 	UFUNCTION()
 	void HandleEndTurnRequested();
 
+	/** UI 주기 갱신 타이머를 건다 (좌석 보드 / 턴 패널 / 손패 잠금). */
+	virtual void BeginPlay() override;
+
 	/** 우클릭 / ESC 로 대상 선택을 취소한다. */
 	virtual void SetupInputComponent() override;
 
-	/** 손패 드래그 잠금. HandWidget 이 없으면 아무것도 하지 않는다. */
+	/** 손패 드래그 잠금(저수준 설정). HandWidget 이 없으면 아무것도 하지 않는다. */
 	void SetHandInteractionLocked(bool bLocked);
+
+	/**
+	 * 잠금 정책을 한곳에서 계산해 적용한다. 잠기는 조건은 둘이다:
+	 *   1) 대상 좌석 선택 대기 중 — 두 번째 카드를 던지지 못하게
+	 *   2) 내 차례가 아님(Play/Discard 페이즈가 아님)
+	 *
+	 * 좌석 보드와 같은 타이머로 주기 호출된다. 카드 위젯을 재생성하지 않으므로
+	 * 갱신 중에도 드래그가 끊기지 않는다.
+	 */
+	void UpdateHandInteractionLock();
 
 	/** 좌석 정보 주기 갱신 간격(초). 0 이하면 갱신하지 않는다. */
 	UPROPERTY(EditDefaultsOnly, Category = "Bang|UI")

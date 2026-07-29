@@ -53,6 +53,7 @@ void ABaamPlayerController::SetHandWidget(UBangHandWidget* InHandWidget)
 
 	TryBindHandDelegate();
 	RefreshHandWidget();
+	UpdateHandInteractionLock();
 }
 
 void ABaamPlayerController::SetHandInteractionLocked(bool bLocked)
@@ -61,6 +62,21 @@ void ABaamPlayerController::SetHandInteractionLocked(bool bLocked)
 	{
 		HandWidget->SetInteractionLocked(bLocked);
 	}
+}
+
+void ABaamPlayerController::UpdateHandInteractionLock()
+{
+	if (!HandWidget)
+	{
+		return;
+	}
+
+	//	잠금 조건을 한곳에서 계산한다. 두 소스가 각자 Set 하면 서로 덮어써서
+	//	"대상 선택 중인데 잠금이 풀린다" 같은 상태가 생긴다.
+	const bool bSelectingTarget = SeatBoardWidget && SeatBoardWidget->IsSelectingTarget();
+	const bool bMyActionPhase   = IsMyTurnToPlay() || IsMyTurnToDiscard();
+
+	HandWidget->SetInteractionLocked(bSelectingTarget || !bMyActionPhase);
 }
 
 void ABaamPlayerController::HandleCardPlayRequested(const FBangCardView& Card)
@@ -95,16 +111,10 @@ void ABaamPlayerController::HandleCardPlayRequested(const FBangCardView& Card)
 	}
 
 	//	대상이 필요한 카드 — 좌석 선택으로 넘긴다.
-	//	잠금을 먼저 걸어야 선택 대기 중 두 번째 카드를 던지지 못한다.
-	SetHandInteractionLocked(true);
 	BeginTargetSelectionForCard(Card.InstanceId);
 
-	//	보드가 없거나 고를 좌석이 없어 선택이 즉시 끝난 경우 잠금이 남지 않게 한다.
-	//	(즉시 취소된 경우엔 취소 핸들러가 이미 풀었으므로 여기서는 no-op)
-	if (!SeatBoardWidget || !SeatBoardWidget->IsSelectingTarget())
-	{
-		SetHandInteractionLocked(false);
-	}
+	//	선택이 실제로 시작됐는지(또는 후보가 없어 즉시 끝났는지)를 보고 잠금을 다시 계산한다.
+	UpdateHandInteractionLock();
 }
 
 void ABaamPlayerController::SetupInputComponent()
@@ -203,11 +213,19 @@ void ABaamPlayerController::SetSeatBoardWidget(UBangSeatBoardWidget* InSeatBoard
 	}
 
 	RefreshSeatBoard();
+}
 
-	if (UWorld* World = GetWorld())
+void ABaamPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	//	UI 주기 갱신은 위젯 연결과 무관하게 돌린다.
+	//	예전에는 SetSeatBoardWidget 안에서 타이머를 걸었는데, 그러면 좌석 보드를 연결하지
+	//	않은 HUD 에서는 손패 잠금 갱신까지 함께 멈춰버린다(숨은 의존성).
+	//	갱신 함수들은 위젯이 없으면 스스로 빠져나가므로 항상 돌려도 안전하다.
+	if (SeatBoardRefreshInterval > 0.f)
 	{
-		World->GetTimerManager().ClearTimer(SeatRefreshTimer);
-		if (SeatBoardWidget && SeatBoardRefreshInterval > 0.f)
+		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().SetTimer(SeatRefreshTimer, this,
 				&ABaamPlayerController::RefreshSeatBoard, SeatBoardRefreshInterval, /*bLoop=*/true);
@@ -224,6 +242,10 @@ void ABaamPlayerController::RefreshSeatBoard()
 
 	//	좌석 보드와 같은 타이머를 쓴다 — 갱신 주기가 갈리면 "턴은 넘어갔는데 버튼은 그대로" 가 된다.
 	RefreshTurnPanel();
+
+	//	턴/페이즈 잠금도 여기서 갱신한다. 페이즈 전환(Draw→Play)은 손패 내용을 바꾸지 않아
+	//	OnHandChanged 가 오지 않는다 — 폴링하지 않으면 자기 차례가 되어도 손패가 잠긴 채 굳는다.
+	UpdateHandInteractionLock();
 }
 
 // ======================================================================================
@@ -349,7 +371,7 @@ void ABaamPlayerController::HandleSeatSelected(int32 SeatIndex, int32 ContextId)
 	UE_LOG(LogBaamCard, Log, TEXT("[PC] 대상 좌석 확정 — Seat=%d Context(카드 InstanceId)=%d"),
 		SeatIndex, ContextId);
 
-	SetHandInteractionLocked(false);
+	UpdateHandInteractionLock();
 
 	//	기본 동작: ContextId 를 카드 InstanceId 로 보고 서버에 사용 요청을 보낸다.
 	//	다른 용도로 쓰려면 이 델리게이트를 구독해 분기하면 된다.
@@ -363,7 +385,7 @@ void ABaamPlayerController::HandleTargetSelectionCancelled(int32 ContextId)
 	UE_LOG(LogBaamCard, Verbose, TEXT("[PC] 대상 선택 취소 — Context=%d"), ContextId);
 
 	//	취소되면 카드는 손패에 그대로 남는다(서버에 보내지 않았다). 다시 집을 수 있게 푼다.
-	SetHandInteractionLocked(false);
+	UpdateHandInteractionLock();
 
 	OnTargetSelectionCancelled.Broadcast(ContextId);
 }

@@ -63,18 +63,18 @@ TArray<FBangCardView> UBaamCardViewLibrary::MakeHandViews(const ABaamPlayerState
 	const TArray<FBaamCardInstance>& Hand = PlayerState->GetHand();
 	Views.Reserve(Hand.Num());
 
-	//	자기 차례가 아니면 손패를 회색으로 표시한다(플레이 존이 드롭도 거부한다).
-	//	Discard 페이즈에서도 조작이 필요하므로 두 페이즈 모두 허용한다.
-	//	어디까지나 표시용 힌트이고 최종 판정은 서버가 다시 한다.
-	const UWorld* World = PlayerState->GetWorld();
-	const ABaamGameState* GS = World ? World->GetGameState<ABaamGameState>() : nullptr;
-	const int32 Seat = PlayerState->GetSeatIndex();
-	const bool bCanAct = GS && (GS->CanSeatPlayCards(Seat) || GS->CanSeatDiscard(Seat));
-
+	//	⚠️ 여기서 턴/페이즈를 반영하지 말 것.
+	//	   bPlayable 은 SetHand 시점에 뷰에 박히는 스냅샷이라, 손패 "내용" 이 바뀔 때만 갱신된다.
+	//	   턴 진행은 Draw 페이즈에서 카드를 뽑은 뒤 Play 로 넘어가므로, 마지막 갱신이 Draw 시점에
+	//	   일어나 "내 차례인데 카드가 안 나가는" 교착이 생겼다(카드를 내야 손패가 바뀌는데
+	//	   카드를 낼 수 없으므로 영구히 풀리지 않는다).
+	//
+	//	   턴/페이즈 잠금은 UBangHandWidget::SetInteractionLocked 가 담당한다 —
+	//	   그쪽은 카드 위젯을 재생성하지 않고 상태만 바꾸므로 주기 갱신해도 드래그가 끊기지 않는다.
+	//	   (ABaamPlayerController::UpdateHandInteractionLock)
 	for (const FBaamCardInstance& Card : Hand)
 	{
-		FBangCardView& View = Views.Add_GetRef(MakeCardView(PlayerState, Card));
-		View.bPlayable = View.bPlayable && bCanAct;
+		Views.Add(MakeCardView(PlayerState, Card));
 	}
 
 	return Views;
