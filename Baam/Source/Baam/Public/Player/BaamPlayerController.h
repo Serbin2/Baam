@@ -6,10 +6,13 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
-#include "BaamPlayerController.generated.h"
+#include "UI/BangCardView.h"       // FBangCardView (OnCardPlayRequested 콜백 시그니처)
+#include "UI/BangSeatView.h"       // FOnBangSeatSelected 등 델리게이트 타입
+#include "BaamPlayerController.generated.h"   // 항상 마지막
 
 class UGameplayAbility;
 class UBangHandWidget;
+class UBangSeatBoardWidget;
 class ABaamPlayerState;
 
 UCLASS()
@@ -21,11 +24,16 @@ public:
 	ABaamPlayerController();
 
 	// 클라(소유): HUD 의 OnCardPlayRequested 에 바인딩한다. 서버로 중계만 한다.
-	//   CardId     : 사용할 카드 종류 태그 (Card.Id.Bang / Card.Id.Beer ...). 숫자 InstanceId 대신
-	//                읽기 쉬운 태그로 지정한다. 같은 카드가 여러 장이면 손패의 첫 장을 쓴다.
+	//   InstanceId : 사용할 카드 인스턴스 (FBangCardView.InstanceId). 손패의 특정 1장을 가리킨다.
 	//   TargetSeat : 대상 좌석. 대상이 필요 없으면 INDEX_NONE.
 	UFUNCTION(BlueprintCallable, Category = "Bang")
-	void RequestPlayCard(FGameplayTag CardId, int32 TargetSeat);
+	void RequestPlayCard(int32 InstanceId, int32 TargetSeat);
+
+	// 테스트/디버그용 — 카드 종류 태그(Card.Id.Beer 등)로 사용 요청한다.
+	//   손패에서 그 종류의 첫 장을 찾아 RequestPlayCard 로 넘긴다. 손패에 없으면 경고 후 무시.
+	//   실제 UI 경로는 InstanceId 를 쓰므로(같은 카드 여러 장 구분) 이건 편의 함수다.
+	UFUNCTION(BlueprintCallable, Category = "Bang|Debug")
+	void RequestPlayCardByTag(FGameplayTag CardId, int32 TargetSeat);
 
 	// ── 손패 UI 배선  ────────────────────────────────────
 	//
@@ -36,6 +44,44 @@ public:
 	// (SetHandWidget / OnRep_PlayerState) 에서 모두 바인딩을 시도한다.
 	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
 	void SetHandWidget(UBangHandWidget* InHandWidget);
+
+	// ── 좌석 보드 UI 배선 ────────────────────────────────────────
+	//
+	// HUD 가 자기 안의 좌석 보드를 한 번 넘겨준다. 이후 갱신은 여기서 처리한다.
+	// 좌석 정보(HP/손패 장수/장비)는 바뀌는 경로가 여럿이라 단일 델리게이트가 없다.
+	// 프로토타입에서는 타이머로 주기 갱신한다 — 좌석 위젯을 좌석 번호로 재사용하므로
+	// 갱신 중에도 마우스 호버나 선택 상태가 끊기지 않는다.
+	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
+	void SetSeatBoardWidget(UBangSeatBoardWidget* InSeatBoard);
+
+	UFUNCTION(BlueprintCallable, Category = "Bang|UI")
+	void RefreshSeatBoard();
+
+	// ── 대상 좌석 선택 ───────────────────────────────────────────
+
+	/**
+	 * 대상 선택을 시작한다. 고를 수 있는 좌석은 호출자가 정한다.
+	 * ContextId 는 응답에 그대로 실려 돌아온다(보통 카드 InstanceId).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Target")
+	void BeginTargetSelection(int32 ContextId, const FText& Prompt, const TArray<int32>& SelectableSeats);
+
+	/**
+	 * 카드 사용용 편의 함수 — 살아 있는 다른 좌석 전부를 대상 후보로 연다.
+	 * ⚠️ 사거리 판정이 아직 없어 실제 규칙보다 넓다. 최종 판정은 서버가 한다(STEP 7/8).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Target")
+	void BeginTargetSelectionForCard(int32 CardInstanceId);
+
+	UFUNCTION(BlueprintCallable, Category = "Bang|Target")
+	void CancelTargetSelection();
+
+	/** 좌석이 확정됐다. 기본 동작으로 ServerRequestPlayCard 를 보낸다. */
+	UPROPERTY(BlueprintAssignable, Category = "Bang|Target")
+	FOnBangSeatSelected OnTargetSeatSelected;
+
+	UPROPERTY(BlueprintAssignable, Category = "Bang|Target")
+	FOnBangTargetSelectionCancelled OnTargetSelectionCancelled;
 
 	// ── 콘솔 테스트 트리거 (구현: BaamCardExec.cpp) ──────────────
 	//
@@ -57,12 +103,33 @@ protected:
 	// 델리게이트 콜백. Dynamic 델리게이트라 UFUNCTION 이어야 한다.
 	UFUNCTION()
 	void HandleHandChanged();
+
+	/** 손패에서 카드를 중앙에 드롭했다. 대상이 필요한 카드면 좌석 선택으로 넘어간다. */
+	UFUNCTION()
+	void HandleCardPlayRequested(const FBangCardView& Card);
+
+	/** 좌석 보드가 좌석 확정을 알려온다. */
+	UFUNCTION()
+	void HandleSeatSelected(int32 SeatIndex, int32 ContextId);
+
+	UFUNCTION()
+	void HandleTargetSelectionCancelled(int32 ContextId);
+
+	/** 우클릭 / ESC 로 대상 선택을 취소한다. */
+	virtual void SetupInputComponent() override;
+
+	/** 손패 드래그 잠금. HandWidget 이 없으면 아무것도 하지 않는다. */
+	void SetHandInteractionLocked(bool bLocked);
+
+	/** 좌석 정보 주기 갱신 간격(초). 0 이하면 갱신하지 않는다. */
+	UPROPERTY(EditDefaultsOnly, Category = "Bang|UI")
+	float SeatBoardRefreshInterval = 0.25f;
 	// 클라 → 서버. 검증 후 카드 사용을 처리한다.
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerRequestPlayCard(FGameplayTag CardId, int32 TargetSeat);
+	void ServerRequestPlayCard(int32 InstanceId, int32 TargetSeat);
 
 	// 서버: 검증 통과 후 실제 처리. 카드가 구동할 GA 를 부여+발동한다.
-	void HandlePlayCard(FGameplayTag CardId, int32 TargetSeat);
+	void HandlePlayCard(int32 InstanceId, int32 TargetSeat);
 
 	// 카드 종류(Card.Id.*) → 그 카드가 구동할 GA 매핑.
 	//   ⚠️ 반드시 에디터(BP 컨트롤러 디폴트)에서 채운다. 비어 있으면 카드가 발동되지 않는다:
@@ -82,4 +149,10 @@ private:
 	// 중복 구독을 막기 위해 현재 구독 중인 PlayerState 를 기억한다.
 	UPROPERTY()
 	TWeakObjectPtr<ABaamPlayerState> BoundPlayerState;
+
+	// HUD 가 넘겨준 좌석 보드. 소유는 HUD 에 있고 여기서는 참조만 한다.
+	UPROPERTY()
+	TObjectPtr<UBangSeatBoardWidget> SeatBoardWidget;
+
+	FTimerHandle SeatRefreshTimer;
 };

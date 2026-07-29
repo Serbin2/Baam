@@ -11,8 +11,13 @@
 #include "Game/BaamDataSubsystem.h"           // GetCardRow
 #include "Game/BaamGameDataTypes.h"           // FBaamCardRow
 #include "Game/BaamPlayerState.h"
+#include "Game/BaamSeatViewLibrary.h"
 #include "GameFramework/GameStateBase.h"      // PlayerArray
 #include "UI/BangHandWidget.h"
+#include "UI/BangSeatBoardWidget.h"
+#include "Components/InputComponent.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 ABaamPlayerController::ABaamPlayerController()
 {
@@ -30,9 +35,82 @@ ABaamPlayerController::ABaamPlayerController()
 
 void ABaamPlayerController::SetHandWidget(UBangHandWidget* InHandWidget)
 {
+	//	위젯이 갈아끼워지면 이전 구독을 정리한다. RefreshHandWidget 은 자주 불리므로
+	//	바인딩은 여기서 한 번만 한다 — 거기서 하면 갱신할 때마다 중복 구독된다.
+	if (HandWidget && HandWidget != InHandWidget)
+	{
+		HandWidget->OnCardPlayRequested.RemoveDynamic(this, &ABaamPlayerController::HandleCardPlayRequested);
+	}
+
 	HandWidget = InHandWidget;
+
+	if (HandWidget)
+	{
+		HandWidget->OnCardPlayRequested.AddDynamic(this, &ABaamPlayerController::HandleCardPlayRequested);
+	}
+
 	TryBindHandDelegate();
 	RefreshHandWidget();
+}
+
+void ABaamPlayerController::SetHandInteractionLocked(bool bLocked)
+{
+	if (HandWidget)
+	{
+		HandWidget->SetInteractionLocked(bLocked);
+	}
+}
+
+void ABaamPlayerController::HandleCardPlayRequested(const FBangCardView& Card)
+{
+	if (!Card.IsValid())
+	{
+		return;
+	}
+
+	//	이미 다른 카드가 대상 선택 중이면 무시한다.
+	//	손패 잠금이 정상 동작하면 여기까지 오지 않지만, 잠금이 걸리기 전의 입력이
+	//	큐에 남아 있을 수 있어 한 번 더 막는다. 안 그러면 ContextId 가 뒤엉킨다.
+	if (SeatBoardWidget && SeatBoardWidget->IsSelectingTarget())
+	{
+		UE_LOG(LogBaamCard, Verbose, TEXT("[PC] 대상 선택 진행 중 — 카드 %d 요청 무시"), Card.InstanceId);
+		return;
+	}
+
+	if (!Card.bNeedsTarget)
+	{
+		//	대상이 필요 없는 카드(맥주, 역마차 등) — 바로 서버로.
+		RequestPlayCard(Card.InstanceId, INDEX_NONE);
+		return;
+	}
+
+	//	대상이 필요한 카드 — 좌석 선택으로 넘긴다.
+	//	잠금을 먼저 걸어야 선택 대기 중 두 번째 카드를 던지지 못한다.
+	SetHandInteractionLocked(true);
+	BeginTargetSelectionForCard(Card.InstanceId);
+
+	//	보드가 없거나 고를 좌석이 없어 선택이 즉시 끝난 경우 잠금이 남지 않게 한다.
+	//	(즉시 취소된 경우엔 취소 핸들러가 이미 풀었으므로 여기서는 no-op)
+	if (!SeatBoardWidget || !SeatBoardWidget->IsSelectingTarget())
+	{
+		SetHandInteractionLocked(false);
+	}
+}
+
+void ABaamPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+
+	if (!InputComponent)
+	{
+		return;
+	}
+
+	//	대상 선택 취소. CancelTargetSelection 은 선택 중이 아니면 아무것도 하지 않으므로
+	//	평소 우클릭에는 영향이 없다.
+	//	⚠️ PIE 에서는 ESC 를 에디터가 먼저 먹어 세션이 종료된다 — 테스트는 우클릭으로 할 것.
+	InputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &ABaamPlayerController::CancelTargetSelection);
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABaamPlayerController::CancelTargetSelection);
 }
 
 void ABaamPlayerController::OnRep_PlayerState()
@@ -84,40 +162,171 @@ void ABaamPlayerController::RefreshHandWidget()
 	}
 
 	// 게임 로직 타입 → UI 뷰모델. 이 한 줄이 로직/UI 경계다.
+	// OnCardPlayRequested 구독은 SetHandWidget 에서 한 번만 한다(여기서 하면 중복 구독).
 	HandWidget->SetHand(UBaamCardViewLibrary::MakeHandViews(PS));
-
-	// TODO(5.7): HandWidget->OnCardPlayRequested 를 RequestPlayCard 로 연결.
-	//            bNeedsTarget 분기(대상 좌석 지정)가 필요해 STEP 5 에서 함께 처리한다.
 }
 
-void ABaamPlayerController::RequestPlayCard(FGameplayTag CardId, int32 TargetSeat)
+// ======================================================================================
+//  좌석 보드 UI 배선
+//
+//  좌석 정보(HP / 손패 장수 / 장비 / 생사)는 바뀌는 경로가 여럿이라 단일 델리게이트가 없다.
+//  프로토타입에서는 타이머로 주기 갱신한다. SetSeats 가 좌석 번호로 위젯을 재사용하므로
+//  갱신 중에도 마우스 호버나 대상 선택 상태가 끊기지 않는다.
+//  TODO: 어트리뷰트 변경 델리게이트 + PlayerArray 변경 훅으로 교체하면 폴링을 없앨 수 있다.
+// ======================================================================================
+
+void ABaamPlayerController::SetSeatBoardWidget(UBangSeatBoardWidget* InSeatBoard)
+{
+	//	위젯이 갈아끼워지면 이전 구독을 정리한다.
+	if (SeatBoardWidget && SeatBoardWidget != InSeatBoard)
+	{
+		SeatBoardWidget->OnSeatSelected.RemoveDynamic(this, &ABaamPlayerController::HandleSeatSelected);
+		SeatBoardWidget->OnTargetSelectionCancelled.RemoveDynamic(this, &ABaamPlayerController::HandleTargetSelectionCancelled);
+	}
+
+	SeatBoardWidget = InSeatBoard;
+
+	if (SeatBoardWidget)
+	{
+		SeatBoardWidget->OnSeatSelected.AddDynamic(this, &ABaamPlayerController::HandleSeatSelected);
+		SeatBoardWidget->OnTargetSelectionCancelled.AddDynamic(this, &ABaamPlayerController::HandleTargetSelectionCancelled);
+	}
+
+	RefreshSeatBoard();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(SeatRefreshTimer);
+		if (SeatBoardWidget && SeatBoardRefreshInterval > 0.f)
+		{
+			World->GetTimerManager().SetTimer(SeatRefreshTimer, this,
+				&ABaamPlayerController::RefreshSeatBoard, SeatBoardRefreshInterval, /*bLoop=*/true);
+		}
+	}
+}
+
+void ABaamPlayerController::RefreshSeatBoard()
+{
+	if (!SeatBoardWidget)
+	{
+		return;
+	}
+	SeatBoardWidget->SetSeats(UBaamSeatViewLibrary::MakeSeatViews(this));
+}
+
+// ======================================================================================
+//  대상 좌석 선택
+// ======================================================================================
+
+void ABaamPlayerController::BeginTargetSelection(int32 ContextId, const FText& Prompt, const TArray<int32>& SelectableSeats)
+{
+	if (!SeatBoardWidget)
+	{
+		UE_LOG(LogBaamCard, Warning, TEXT("[PC] 좌석 보드가 없어 대상 선택을 시작할 수 없습니다."));
+		return;
+	}
+
+	FBangTargetRequest Request;
+	Request.ContextId        = ContextId;
+	Request.Prompt           = Prompt;
+	Request.SelectableSeats  = SelectableSeats;
+	Request.bAllowCancel     = true;
+
+	SeatBoardWidget->BeginTargetSelection(Request);
+}
+
+void ABaamPlayerController::BeginTargetSelectionForCard(int32 CardInstanceId)
+{
+	//	사거리 판정은 아직 없다 — 살아 있는 다른 좌석 전부를 후보로 연다(STEP 7/8 에서 좁힌다).
+	BeginTargetSelection(
+		CardInstanceId,
+		NSLOCTEXT("Bang", "SelectTargetSeat", "대상을 선택하세요"),
+		UBaamSeatViewLibrary::GetSelectableSeats(this, /*bExcludeSelf=*/true));
+}
+
+void ABaamPlayerController::CancelTargetSelection()
+{
+	if (SeatBoardWidget)
+	{
+		SeatBoardWidget->CancelTargetSelection();
+	}
+}
+
+void ABaamPlayerController::HandleSeatSelected(int32 SeatIndex, int32 ContextId)
+{
+	UE_LOG(LogBaamCard, Log, TEXT("[PC] 대상 좌석 확정 — Seat=%d Context(카드 InstanceId)=%d"),
+		SeatIndex, ContextId);
+
+	SetHandInteractionLocked(false);
+
+	//	기본 동작: ContextId 를 카드 InstanceId 로 보고 서버에 사용 요청을 보낸다.
+	//	다른 용도로 쓰려면 이 델리게이트를 구독해 분기하면 된다.
+	RequestPlayCard(ContextId, SeatIndex);
+
+	OnTargetSeatSelected.Broadcast(SeatIndex, ContextId);
+}
+
+void ABaamPlayerController::HandleTargetSelectionCancelled(int32 ContextId)
+{
+	UE_LOG(LogBaamCard, Verbose, TEXT("[PC] 대상 선택 취소 — Context=%d"), ContextId);
+
+	//	취소되면 카드는 손패에 그대로 남는다(서버에 보내지 않았다). 다시 집을 수 있게 푼다.
+	SetHandInteractionLocked(false);
+
+	OnTargetSelectionCancelled.Broadcast(ContextId);
+}
+
+void ABaamPlayerController::RequestPlayCard(int32 InstanceId, int32 TargetSeat)
 {
 	// 클라(요청 발신) 확인용. 이 줄이 안 뜨면 UI 바인딩이 RequestPlayCard 를 안 부르는 것.
 	BaamDebug::Screen(
-		FString::Printf(TEXT("[클라] 카드요청 보냄  %s  TargetSeat=%d  (→ 서버)"),
-			CardId.IsValid() ? *CardId.ToString() : TEXT("(무효)"), TargetSeat),
+		FString::Printf(TEXT("[클라] 카드요청 보냄  Instance=%d  TargetSeat=%d  (→ 서버)"),
+			InstanceId, TargetSeat),
 		FColor(180, 180, 255), /*Time=*/5.f);
 
 	// 로컬에서는 검증하지 않는다 (클라 표시는 힌트일 뿐, 권위는 서버). 그대로 중계.
-	ServerRequestPlayCard(CardId, TargetSeat);
+	ServerRequestPlayCard(InstanceId, TargetSeat);
 }
 
-bool ABaamPlayerController::ServerRequestPlayCard_Validate(FGameplayTag CardId, int32 TargetSeat)
+void ABaamPlayerController::RequestPlayCardByTag(FGameplayTag CardId, int32 TargetSeat)
+{
+	// 손패에서 그 종류의 첫 장을 찾아 InstanceId 로 넘긴다 (테스트 편의 함수).
+	const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>();
+	if (!PS || !CardId.IsValid())
+	{
+		return;
+	}
+
+	for (const FBaamCardInstance& Card : PS->GetHand())
+	{
+		if (Card.CardId == CardId.GetTagName())
+		{
+			RequestPlayCard(Card.InstanceId, TargetSeat);
+			return;
+		}
+	}
+
+	BaamDebug::Screen(
+		FString::Printf(TEXT("[클라] 손패에 %s 가 없습니다 — 요청 취소."), *CardId.ToString()),
+		FColor::Red, /*Time=*/5.f);
+}
+
+bool ABaamPlayerController::ServerRequestPlayCard_Validate(int32 InstanceId, int32 TargetSeat)
 {
 	// 형식 검증만 (악의적 페이로드 차단). 규칙 검증은 _Implementation 에서.
-	return CardId.IsValid();
+	return InstanceId != INDEX_NONE;
 }
 
-void ABaamPlayerController::ServerRequestPlayCard_Implementation(FGameplayTag CardId, int32 TargetSeat)
+void ABaamPlayerController::ServerRequestPlayCard_Implementation(int32 InstanceId, int32 TargetSeat)
 {
-	HandlePlayCard(CardId, TargetSeat);
+	HandlePlayCard(InstanceId, TargetSeat);
 }
 
-void ABaamPlayerController::HandlePlayCard(FGameplayTag CardId, int32 TargetSeat)
+void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 {
 	// TODO(2단계): GameState 규칙 검증 — 내 턴? Phase.Play? 사거리? BangLimit?
-	UE_LOG(LogTemp, Log, TEXT("[Bang] ServerRequestPlayCard 수신 — PC=%s Card=%s TargetSeat=%d"),
-		*GetName(), *CardId.ToString(), TargetSeat);
+	UE_LOG(LogTemp, Log, TEXT("[Bang] ServerRequestPlayCard 수신 — PC=%s Instance=%d TargetSeat=%d"),
+		*GetName(), InstanceId, TargetSeat);
 
 	// 시전자의 ASC 를 얻는다 (현재 ASC 는 캐릭터 소유).
 	UAbilitySystemComponent* ASC =
@@ -129,19 +338,37 @@ void ABaamPlayerController::HandlePlayCard(FGameplayTag CardId, int32 TargetSeat
 		return;
 	}
 
-	// ── 손패에 그 카드가 있는지 확인 (테스트 편의상 없어도 진행, 표시만 한다) ──
-	// TODO(2단계): 없으면 거부. + 실제 사용 시 RemoveCardFromHand 로 첫 매칭 인스턴스를 뺀다.
-	bool bInHand = false;
+	// ── InstanceId → 손패에서 카드 조회 → 카드 종류 태그 + 메커니즘 태그 ──
+	// TODO(2단계): 손패에 없으면 거부는 이미 하고 있고, 실제 사용 시
+	//              RemoveCardFromHand 로 그 인스턴스를 빼는 처리가 남았다.
+	FGameplayTag CardId;    // 맵 조회 키 (Card.Id.*)
+	FGameplayTag EventTag;  // 페이로드/로그용 메커니즘 태그 (Ability.*)
 	if (const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
 	{
+		const UGameInstance* GI = GetGameInstance();
+		const UBaamDataSubsystem* Data = GI ? GI->GetSubsystem<UBaamDataSubsystem>() : nullptr;
+
 		for (const FBaamCardInstance& Card : PS->GetHand())
 		{
-			if (Card.CardId == CardId.GetTagName())
+			if (Card.InstanceId == InstanceId)
 			{
-				bInHand = true;
+				if (const FBaamCardRow* Row = Data ? Data->GetCardRow(Card.CardId) : nullptr)
+				{
+					CardId   = Row->CardIdTag;
+					EventTag = Row->AbilityEventTag;
+				}
 				break;
 			}
 		}
+	}
+
+	if (!CardId.IsValid())
+	{
+		BaamDebug::Screen(
+			FString::Printf(TEXT("[서버] 카드 Instance=%d 를 손패에서 못 찾음(또는 Row 의 CardIdTag 비어있음)."),
+				InstanceId),
+			FColor::Red, 8.f);
+		return;
 	}
 
 	// ── CardId 태그 → GA 클래스 (맵을 "카드 종류"로 직접 조회) ──
@@ -170,17 +397,6 @@ void ABaamPlayerController::HandlePlayCard(FGameplayTag CardId, int32 TargetSeat
 	}
 	TSubclassOf<UGameplayAbility> AbilityClass = *Found;
 
-	// 메커니즘 태그(선택): 페이로드/로그용. DT Row 의 AbilityEventTag — 없어도 진행한다.
-	FGameplayTag EventTag;
-	{
-		const UGameInstance* GI = GetGameInstance();
-		const UBaamDataSubsystem* Data = GI ? GI->GetSubsystem<UBaamDataSubsystem>() : nullptr;
-		if (const FBaamCardRow* Row = Data ? Data->GetCardRow(CardId) : nullptr)
-		{
-			EventTag = Row->AbilityEventTag;
-		}
-	}
-
 	// ── 대상/시전자 페이로드 구성 (뱅처럼 TargetSeat 이 있는 카드는 대상 폰을 넘긴다) ──
 	FGameplayEventData Payload;
 	Payload.EventTag = EventTag;
@@ -191,9 +407,9 @@ void ABaamPlayerController::HandlePlayCard(FGameplayTag CardId, int32 TargetSeat
 	}
 
 	BaamDebug::Screen(
-		FString::Printf(TEXT("[서버] 카드처리  %s  손패:%s  메커니즘[%s] → %s  대상:%s"),
+		FString::Printf(TEXT("[서버] 카드처리  %s #%d  메커니즘[%s] → %s  대상:%s"),
 			*CardId.ToString(),
-			bInHand ? TEXT("있음") : TEXT("없음"),
+			InstanceId,
 			EventTag.IsValid() ? *EventTag.ToString() : TEXT("-"),
 			*AbilityClass->GetName(),
 			Payload.Target.Get() ? *Payload.Target->GetName() : TEXT("없음")),

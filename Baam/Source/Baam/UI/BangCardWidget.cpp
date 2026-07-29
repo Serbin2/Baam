@@ -34,6 +34,16 @@ void UBangCardWidget::SetBeingDragged(bool bInBeingDragged)
 	RefreshVisual();
 }
 
+void UBangCardWidget::SetDragLocked(bool bInLocked)
+{
+	if (bDragLocked == bInLocked)
+	{
+		return;
+	}
+	bDragLocked = bInLocked;
+	RefreshVisual();
+}
+
 void UBangCardWidget::RefreshVisual()
 {
 	if (Text_CardName)
@@ -46,7 +56,9 @@ void UBangCardWidget::RefreshVisual()
 	}
 	if (Border_Root)
 	{
+		//	잠금이 가장 우선 — 잠긴 동안에는 사용 가능 여부와 무관하게 손댈 수 없다.
 		const FLinearColor Tint =
+			bDragLocked          ? LockedTint :
 			bBeingDragged        ? DraggedTint :
 			!CardView.bPlayable  ? UnplayableTint :
 			                       NormalTint;
@@ -57,7 +69,8 @@ void UBangCardWidget::RefreshVisual()
 FReply UBangCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	// 드래그 비주얼 복제본은 입력을 받지 않는다.
-	if (bIsDragVisual)
+	// 잠금 중(대상 선택 대기 등)에도 드래그를 시작시키지 않는다.
+	if (bIsDragVisual || bDragLocked)
 	{
 		return FReply::Unhandled();
 	}

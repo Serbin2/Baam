@@ -56,6 +56,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Bang|Hand")
 	void NotifyCardPlayRequested(const FBangCardView& Card);
 
+	/**
+	 * 손패 전체의 드래그를 잠근다. 대상 좌석 선택을 기다리는 동안 쓴다.
+	 *
+	 * 잠금은 위젯이 아니라 손패 상태로 기억되므로, 잠긴 동안 SetHand() 로 손패가
+	 * 갱신돼도 새로 만들어진 카드에 그대로 적용된다. (서버 손패 복제와 대상 선택은
+	 * 동시에 일어날 수 있어서, 이게 없으면 갱신 한 번에 잠금이 풀린다.)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Hand")
+	void SetInteractionLocked(bool bInLocked);
+
+	UFUNCTION(BlueprintPure, Category = "Bang|Hand")
+	bool IsInteractionLocked() const { return bInteractionLocked; }
+
 	/** 게임 로직 없이 UI 만 테스트하기 위한 더미 손패. */
 	UFUNCTION(BlueprintCallable, Category = "Bang|Hand|Debug")
 	void FillWithDebugCards(int32 Count = 5);
@@ -73,4 +86,7 @@ protected:
 private:
 	UPROPERTY()
 	TArray<TObjectPtr<UBangCardWidget>> CardWidgets;
+
+	/** 위젯이 아니라 손패에 붙는 상태. SetHand 로 카드가 새로 만들어져도 유지된다. */
+	bool bInteractionLocked = false;
 };

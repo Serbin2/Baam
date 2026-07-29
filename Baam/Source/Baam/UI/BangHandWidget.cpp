@@ -36,6 +36,10 @@ void UBangHandWidget::SetHand(const TArray<FBangCardView>& InCards)
 		CardWidget->SetOwningHand(this);
 		CardWidget->SetCardView(Card);
 
+		//	잠긴 동안 손패가 갱신될 수 있다(서버 복제와 대상 선택은 동시에 일어난다).
+		//	새 위젯에도 잠금을 그대로 물려주지 않으면 갱신 한 번에 잠금이 풀린다.
+		CardWidget->SetDragLocked(bInteractionLocked);
+
 		// 'Slot' 은 UWidget 의 멤버명이므로 섀도잉을 피한다 (C4458 은 에러로 승격됨).
 		UPanelSlot* AddedSlot = Box_Cards->AddChild(CardWidget);
 		if (UHorizontalBoxSlot* HBoxSlot = Cast<UHorizontalBoxSlot>(AddedSlot))
@@ -82,6 +86,19 @@ UBangCardWidget* UBangHandWidget::FindCardWidget(int32 InstanceId) const
 		}
 	}
 	return nullptr;
+}
+
+void UBangHandWidget::SetInteractionLocked(bool bInLocked)
+{
+	bInteractionLocked = bInLocked;
+
+	for (UBangCardWidget* CardWidget : CardWidgets)
+	{
+		if (CardWidget)
+		{
+			CardWidget->SetDragLocked(bInLocked);
+		}
+	}
 }
 
 void UBangHandWidget::NotifyCardPlayRequested(const FBangCardView& Card)

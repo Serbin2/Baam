@@ -53,6 +53,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Baam|Player")
 	int32 GetHandCount() const { return HandCount; }
 
+	//	장착 중인 파란 카드. 공개 정보라 전원에게 복제된다.
+	const TArray<FBaamCardInstance>& GetEquipment() const { return Equipment; }
+
 private:
 	//	소유 클라에 Hand 가 복제되면 호출된다.
 	//	TODO(3.2): 여기서 OnHandChanged 를 브로드캐스트해 손패 UI 를 갱신한다.
