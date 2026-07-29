@@ -1,4 +1,4 @@
-// BANG! 플레이어 상태 — 좌석/손패/장비/생존 등 플레이어별 데이터의 소유자(md §1.2).
+// BANG! 플레이어 상태 — 좌석/손패/장비/생존 등 플레이어별 데이터의 소유자.
 // 손패는 COND_OwnerOnly 로 본인에게만, 장수는 전원에게 복제한다.
 // 아직 카드 계층이 없어 좌석만 들고 있다 — 손패/장비는 M2 에서 여기에 붙인다.
 
@@ -6,9 +6,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "GameplayTagContainer.h"
 #include "BaamPlayerState.generated.h"
 
 struct FBaamCardInstance;
+class UBaamReadyComponent;
 
 /** 손패 내용이 바뀌었다. UI 는 여기에 구독해 갱신한다. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBaamHandChanged);
@@ -39,7 +41,8 @@ public:
 
 	// 서버 전용. 판 시작 시 게임모드가 좌석을 매긴다.
 	void SetSeatIndex(int32 InSeat);
-	
+
+
 	//	서버 전용. 손패 변경. HandCount 동기화를 한곳에 모으기 위해 Hand 는 이 둘로만 건드린다.
 	void AddCardToHand(const FBaamCardInstance& Card);
 	bool RemoveCardFromHand(int32 InstanceId, FBaamCardInstance& OutRemoved);
@@ -57,6 +60,10 @@ public:
 	const TArray<FBaamCardInstance>& GetEquipment() const { return Equipment; }
 
 private:
+	//	로비 준비 상태는 이 컴포넌트가 갖는다.
+	UPROPERTY(VisibleAnywhere, Category = "Baam|Player")
+	TObjectPtr<UBaamReadyComponent> Ready;
+
 	//	소유 클라에 Hand 가 복제되면 호출된다.
 	//	TODO(3.2): 여기서 OnHandChanged 를 브로드캐스트해 손패 UI 를 갱신한다.
 	//	⚠️ 리슨서버 호스트는 OnRep 이 호출되지 않으므로, 그때는 AddCardToHand /

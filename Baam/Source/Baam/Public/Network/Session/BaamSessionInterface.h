@@ -35,13 +35,25 @@ public:
 	// 세션 파기(호스트/클라 공통).
 	virtual void LeaveSession() = 0;
 
-	// 호스트 전용 수동 시작. 맵 이동 없이 제자리에서 판을 연다(md §1.4).
-	// 정원이 차면 자동으로 시작되므로 보통은 쓰지 않는다.
+	// 로컬 플레이어의 준비 상태를 바꾼다. 호스트는 준비 없이 시작할 수 있다.
+	virtual void SetLocalReady(bool bReady) = 0;
+
+	// 호스트 전용 수동 시작. 맵 이동 없이 제자리에서 판을 연다.
+	// 최소 인원이 모이고 전원이 준비해야 통과한다.
 	virtual void StartGame() = 0;
 
 	// ── 조회 ──
 	// 이 인스턴스가 서버 권위인가.
 	virtual bool IsHost() const = 0;
+
+	// 로컬 플레이어가 준비 상태인가.
+	virtual bool IsLocalReady() const = 0;
+
+	// 지금 호스트가 시작할 수 있는가. 사유는 OutReason 으로 돌려준다.
+	virtual bool CanStartGame(FString& OutReason) const = 0;
+
+	// 로비 인원/준비 현황.
+	virtual FBaamLobbyStatus GetLobbyStatus() const = 0;
 
 	// 현재 방 코드. 호스트가 아니면 빈 문자열.
 	virtual FString GetRoomCode() const = 0;

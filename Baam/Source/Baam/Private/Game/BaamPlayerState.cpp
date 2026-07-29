@@ -2,12 +2,15 @@
 
 #include "Game/BaamCardLog.h"
 #include "Game/BaamCardType.h"
+#include "Game/BaamReadyComponent.h"
 #include "Net/UnrealNetwork.h"
 
 ABaamPlayerState::ABaamPlayerState()
 {
 	// 로비 표시가 즉시 따라오도록 기본값(2Hz)보다 자주 보낸다.
 	SetNetUpdateFrequency(10.f);
+
+	Ready = CreateDefaultSubobject<UBaamReadyComponent>(TEXT("Ready"));
 }
 
 void ABaamPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

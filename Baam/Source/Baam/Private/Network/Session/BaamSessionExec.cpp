@@ -74,6 +74,17 @@ void UBaamGameInstance::Baam_Leave()
 #endif
 }
 
+void UBaamGameInstance::Baam_Ready(int32 bReady)
+{
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogBaamNet, Log, TEXT("[Exec] Baam_Ready %d"), bReady);
+	if (IBaamSessionInterface* Session = GetSession(this))
+	{
+		Session->SetLocalReady(bReady != 0);
+	}
+#endif
+}
+
 void UBaamGameInstance::Baam_Start()
 {
 #if !UE_BUILD_SHIPPING

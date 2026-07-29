@@ -7,6 +7,7 @@
 #include "Game/BaamCardLog.h"
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamDiceComponent.h"
+#include "Game/BaamGameplayTags.h"
 #include "Net/UnrealNetwork.h"
 
 ABaamGameState::ABaamGameState()
@@ -34,7 +35,19 @@ void ABaamGameState::BeginPlay()
 	if (HasAuthority())
 	{
 		InitializeDeck();
+		SetPhaseTag(Bang::Phase::Lobby.GetTag());
 	}
+}
+
+void ABaamGameState::SetPhaseTag(FGameplayTag InPhase)
+{
+	if (!HasAuthority() || PhaseTag == InPhase)
+	{
+		return;
+	}
+
+	PhaseTag = InPhase;
+	UE_LOG(LogBaamCard, Log, TEXT("[GameState] 페이즈 → %s"), *InPhase.ToString());
 }
 
 void ABaamGameState::InitializeDeck(int32 Seed)

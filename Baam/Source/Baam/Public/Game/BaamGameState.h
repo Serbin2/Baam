@@ -44,6 +44,13 @@ public:
 	//	⚠️ 서버 전용 데이터다. 클라에서 부르면 항상 빈 배열이 나온다(덱 내용은 복제되지 않는다).
 	void GetDeck(TArray<FBaamCardInstance>& OutDeck) const;
 
+	//	현재 페이즈. 클라도 읽는다 — 로비 UI 가 Phase.Play 를 보고 스스로 물러난다.
+	UFUNCTION(BlueprintPure, Category = "Baam|Phase")
+	FGameplayTag GetPhaseTag() const { return PhaseTag; }
+
+	//	서버 전용. 페이즈를 바꾼다.
+	void SetPhaseTag(FGameplayTag InPhase);
+
 	//	전원에게 복제되는 공개 카운트. 클라 UI/검증은 이 값을 본다.
 	UFUNCTION(BlueprintPure, Category = "Baam|Deck")
 	int32 GetDeckCount() const { return DeckCount; }

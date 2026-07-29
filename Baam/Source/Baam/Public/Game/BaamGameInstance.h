@@ -83,6 +83,9 @@ public:
 	void Baam_JoinCode(const FString& Code);
 	UFUNCTION(Exec)
 	void Baam_Leave();
+	// 준비 토글(1=준비, 0=해제). 호스트는 항상 준비 상태라 필요 없다.
+	UFUNCTION(Exec)
+	void Baam_Ready(int32 bReady);
 	UFUNCTION(Exec)
 	void Baam_Start();
 	UFUNCTION(Exec)
