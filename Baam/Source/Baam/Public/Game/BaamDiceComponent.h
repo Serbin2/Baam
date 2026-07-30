@@ -16,6 +16,8 @@
 #include "Math/RandomStream.h"
 #include "GameplayTagContainer.h"
 #include "Game/BaamGameDataTypes.h"   // EBaamDiceOutcome / FBaamOutcomeWeights
+class UAbilitySystemComponent;
+
 #include "BaamDiceComponent.generated.h"
 
 UCLASS(ClassGroup = (Baam), meta = (BlueprintSpawnableComponent))
@@ -102,6 +104,18 @@ public:
 	/** 행운 보정을 비율에 반영한 결과를 돌려준다 (순수 계산 — 클라의 확률 미리보기에도 쓴다). */
 	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
 	FBaamOutcomeWeights ApplyLuck(const FBaamOutcomeWeights& Base, int32 Luck) const;
+
+	/**
+	 * 시전자의 모든 보정(행운 + 비율 보정 어트리뷰트)을 반영한 최종 비율.
+	 *
+	 * 적용 순서 (GDD §14 "보정 합산 방식" 확정안):
+	 *   기본 비율 × 승산(WeightMult*) + 가산(WeightBonus* + 행운) → 0 클램프
+	 *
+	 * 순수 계산이라 클라에서도 안전하다 — GDD §10 의 "최종 확률 표시" 에 그대로 쓴다.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Bang|Dice")
+	FBaamOutcomeWeights ApplyModifiers(const FBaamOutcomeWeights& Base,
+		const UAbilitySystemComponent* SourceASC) const;
 
 	/**
 	 * 비율로 판정한다 (서버 전용). OutRoll 은 0~99 난수 원본.

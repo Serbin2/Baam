@@ -53,6 +53,26 @@ namespace Bang
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Remington)
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(RevCarabine)
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Winchester)
+
+			// ── BAAM 신규 카드 (Docs/Additional-Card-List.txt) ──
+			//  기본판이 아니라 이 프로젝트에서 새로 만든 카드다(GDD §6.4).
+			//  효과는 DT_BaamCard 의 OutcomeEffects 에 데이터로 적고,
+			//  AbilityByCardId 에서 UGA_BaamCardEffects(범용 실행기)로 매핑한다.
+
+			//  공격
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(QuickStrike)     // 속공
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ExposeWeakness)  // 약점 포착
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Trap)            // 함정
+
+			//  회복
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Prepare)         // 준비
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Rest)            // 휴식
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Brace)           // 대비
+
+			//  장비(파란 카드)
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(DwarfGloves)     // 드워프 장갑
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(FairyArmor)      // 요정 갑옷
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(WitchCharm)      // 마녀의 부적
 		}
 		
 		namespace Trait
@@ -124,6 +144,36 @@ namespace Bang
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Bang)           // 인디언/결투에 Bang!
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(PickRevealed)   // 잡화점: 공개된 카드 중 선택
 			UE_DECLARE_GAMEPLAY_TAG_EXTERN(PickFromPlayer) // Panic!/Cat Balou: 대상에게서 선택
+		}
+	}
+
+	// ---------------------------------------------------------------------------------
+	//  Status.* — "다음 1회" 대기 상태 (Additional-Card-List 의 약점 포착 / 함정 / 준비 / 대비).
+	//
+	//    저장은 ABaamPlayerState::PendingStatuses 다 (태그 + 수치, 복제됨).
+	//    ASC 루즈 태그를 쓰지 않는 이유:
+	//      · 루즈 태그는 복제되지 않아 클라 UI 가 상태를 볼 수 없다
+	//      · 태그만으로는 수치(약점 포착 +1 / +2)를 담을 수 없다
+	//      · 검사 지점이 전부 서버 C++ 이라 GAS 태그 조회의 이점이 없다
+	//
+	//    ⚠️ 한 번 발동되면 소모된다. 중첩은 허용하지 않는다(이미 가진 상태를 주는 카드는 사용 거부).
+	// ---------------------------------------------------------------------------------
+	namespace Status
+	{
+		//  다음에 사용하는 카드 1장의 판정을 강제한다.
+		namespace NextCard
+		{
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ForceSuccess)          // 준비(성공)
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ForceCriticalSuccess)  // 준비(대성공)
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ForceFailure)          // 함정(성공)
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ForceCriticalFailure)  // 함정(대성공)
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(KeepCardUse)           // 대비 — 실패해도 사용한도 유지
+		}
+
+		//  다음 공격 1회에 적용된다.
+		namespace NextAttack
+		{
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(DamageBonus)           // 약점 포착 (수치 = 증가량)
 		}
 	}
 

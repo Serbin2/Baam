@@ -39,6 +39,22 @@ namespace Bang
 			UE_DEFINE_GAMEPLAY_TAG(Remington,    "Card.Id.Remington")
 			UE_DEFINE_GAMEPLAY_TAG(RevCarabine,  "Card.Id.RevCarabine")
 			UE_DEFINE_GAMEPLAY_TAG(Winchester,   "Card.Id.Winchester")
+
+			// ── BAAM 신규 카드 (Docs/Additional-Card-List.txt) ──
+			//  공격
+			UE_DEFINE_GAMEPLAY_TAG(QuickStrike,    "Card.Id.QuickStrike")
+			UE_DEFINE_GAMEPLAY_TAG(ExposeWeakness, "Card.Id.ExposeWeakness")
+			UE_DEFINE_GAMEPLAY_TAG(Trap,           "Card.Id.Trap")
+
+			//  회복
+			UE_DEFINE_GAMEPLAY_TAG(Prepare,        "Card.Id.Prepare")
+			UE_DEFINE_GAMEPLAY_TAG(Rest,           "Card.Id.Rest")
+			UE_DEFINE_GAMEPLAY_TAG(Brace,          "Card.Id.Brace")
+
+			//  장비(파란 카드)
+			UE_DEFINE_GAMEPLAY_TAG(DwarfGloves,    "Card.Id.DwarfGloves")
+			UE_DEFINE_GAMEPLAY_TAG(FairyArmor,     "Card.Id.FairyArmor")
+			UE_DEFINE_GAMEPLAY_TAG(WitchCharm,     "Card.Id.WitchCharm")
 		}
 
 		namespace Trait
@@ -94,6 +110,23 @@ namespace Bang
 			UE_DEFINE_GAMEPLAY_TAG(Bang,           "Response.Allow.Bang")
 			UE_DEFINE_GAMEPLAY_TAG(PickRevealed,   "Response.Allow.PickRevealed")
 			UE_DEFINE_GAMEPLAY_TAG(PickFromPlayer, "Response.Allow.PickFromPlayer")
+		}
+	}
+
+	namespace Status
+	{
+		namespace NextCard
+		{
+			UE_DEFINE_GAMEPLAY_TAG(ForceSuccess,         "Status.NextCard.ForceSuccess")
+			UE_DEFINE_GAMEPLAY_TAG(ForceCriticalSuccess, "Status.NextCard.ForceCriticalSuccess")
+			UE_DEFINE_GAMEPLAY_TAG(ForceFailure,         "Status.NextCard.ForceFailure")
+			UE_DEFINE_GAMEPLAY_TAG(ForceCriticalFailure, "Status.NextCard.ForceCriticalFailure")
+			UE_DEFINE_GAMEPLAY_TAG(KeepCardUse,          "Status.NextCard.KeepCardUse")
+		}
+
+		namespace NextAttack
+		{
+			UE_DEFINE_GAMEPLAY_TAG(DamageBonus,          "Status.NextAttack.DamageBonus")
 		}
 	}
 

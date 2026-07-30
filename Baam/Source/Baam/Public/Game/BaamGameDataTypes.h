@@ -56,6 +56,26 @@ struct FBaamOutcomeWeights
 		Success         = FMath::Max(0, Success + SuccessBonus);
 		CriticalSuccess = FMath::Max(0, CriticalSuccess + CriticalBonus);
 	}
+
+	/** 네 등급 모두에 가산 보정. 큰 음수를 주면 그 등급이 사실상 무효화된다(드워프 장갑). */
+	void ApplyBonusAll(int32 BonusCF, int32 BonusF, int32 BonusS, int32 BonusCS)
+	{
+		CriticalFailure = FMath::Max(0, CriticalFailure + BonusCF);
+		Failure         = FMath::Max(0, Failure         + BonusF);
+		Success         = FMath::Max(0, Success         + BonusS);
+		CriticalSuccess = FMath::Max(0, CriticalSuccess + BonusCS);
+	}
+
+	/**
+	 * 승산 보정. 가산보다 "먼저" 적용해야 한다 —
+	 * 큰 음수 가산으로 등급을 무효화하는 장비가 배율에 흔들리면 안 된다.
+	 */
+	void ApplyMultiplier(float MultCF, float MultS, float MultCS)
+	{
+		CriticalFailure = FMath::Max(0, FMath::RoundToInt(CriticalFailure * FMath::Max(0.f, MultCF)));
+		Success         = FMath::Max(0, FMath::RoundToInt(Success         * FMath::Max(0.f, MultS)));
+		CriticalSuccess = FMath::Max(0, FMath::RoundToInt(CriticalSuccess * FMath::Max(0.f, MultCS)));
+	}
 };
 
 /**
@@ -91,6 +111,93 @@ struct FBaamOutcomeMagnitudes
 		case EBaamDiceOutcome::CriticalFailure: return CriticalFailure;
 		default:                                return 0;
 		}
+	}
+};
+
+/**
+ * 카드 효과 1개의 종류 (GDD §4.3 "등급별 효과").
+ *
+ * 한 등급이 여러 효과를 가질 수 있어야 한다 — 예) 속공 대성공은
+ * "카드 1장 뽑기 + 피해 1 + 카드 사용한도 1 회복" 세 개다.
+ * 그래서 등급별 수치 하나(FBaamOutcomeMagnitudes)로는 표현할 수 없다.
+ */
+UENUM(BlueprintType)
+enum class EBaamCardEffectOp : uint8
+{
+	None                UMETA(DisplayName = "없음"),
+	DamageTarget        UMETA(DisplayName = "대상에게 피해"),
+	HealSelf            UMETA(DisplayName = "자신 회복"),
+	DrawSelf            UMETA(DisplayName = "자신 카드 뽑기"),
+	DiscardTargetRandom UMETA(DisplayName = "대상 손패 무작위 버리기"),
+	StealTargetRandom   UMETA(DisplayName = "대상 손패 무작위 훔치기"),
+	RestoreCardUse      UMETA(DisplayName = "카드 사용한도 회복"),
+	ApplyStatus         UMETA(DisplayName = "\"다음 1회\" 상태 부여")
+};
+
+/** 효과 1개. Amount 의 의미는 Op 에 따라 다르다(피해량 / 장수 / 회복 횟수). */
+USTRUCT(BlueprintType)
+struct FBaamCardEffect
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EBaamCardEffectOp Op = EBaamCardEffectOp::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"))
+	int32 Amount = 1;
+
+	//	ApplyStatus 전용 — 부여할 Status.* 태그.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FGameplayTag StatusTag;
+
+	/**
+	 * ApplyStatus 전용 — true 면 대상에게, false 면 시전자에게 부여한다.
+	 *   함정 = true (상대의 다음 카드를 방해)
+	 *   약점 포착 / 준비 / 대비 = false (자기 강화)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bToTarget = false;
+};
+
+/**
+ * 등급별 효과 목록 (GDD §4.3).
+ *
+ * 비어 있는 등급은 "효과 없음" 이다 — GDD §4.1 의 실패 기본안, §4.4 의 "대실패가 모든 카드에
+ * 불이익을 강제하지 않는다" 를 그대로 표현한다.
+ */
+USTRUCT(BlueprintType)
+struct FBaamOutcomeEffects
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FBaamCardEffect> CriticalFailure;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FBaamCardEffect> Failure;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FBaamCardEffect> Success;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FBaamCardEffect> CriticalSuccess;
+
+	const TArray<FBaamCardEffect>& ForOutcome(EBaamDiceOutcome Outcome) const
+	{
+		switch (Outcome)
+		{
+		case EBaamDiceOutcome::CriticalSuccess: return CriticalSuccess;
+		case EBaamDiceOutcome::Success:         return Success;
+		case EBaamDiceOutcome::Failure:         return Failure;
+		default:                                return CriticalFailure;
+		}
+	}
+
+	/** 어느 등급에도 효과가 없으면 true — 이 카드는 효과 목록 방식을 쓰지 않는다. */
+	bool IsEmpty() const
+	{
+		return CriticalFailure.IsEmpty() && Failure.IsEmpty()
+			&& Success.IsEmpty() && CriticalSuccess.IsEmpty();
 	}
 };
 
@@ -207,4 +314,13 @@ public:
 	//	비어 있으면 모든 보정을 받는다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
 	FGameplayTagContainer ModifierTags;
+
+	/**
+	 * 등급별 효과 목록. 한 등급에 여러 효과를 넣을 수 있다(속공·휴식 등).
+	 *
+	 * 이걸 채운 카드는 GA 를 따로 만들지 않고 UGA_BaamCardEffects(범용 실행기)에 매핑한다.
+	 * 비워 두면 기존 전용 GA 경로를 쓴다 — 그때는 위 OutcomeMagnitudes 가 수치를 전달한다.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
+	FBaamOutcomeEffects OutcomeEffects;
 };

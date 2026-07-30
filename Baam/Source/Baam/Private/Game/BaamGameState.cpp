@@ -508,6 +508,9 @@ void ABaamGameState::HandleSeatDeath(int32 DeadSeat, int32 KillerSeat)
 		//	뱅 규칙: 죽으면 역할이 공개된다. 이 시점부터 전원이 볼 수 있다.
 		DeadPS->SetPublicRole(DeadRole);
 
+		//	걸려 있던 "다음 1회" 상태는 사라진다(발동될 다음 카드가 없다).
+		DeadPS->ClearPendingStatuses();
+
 		TArray<FBaamCardInstance> Dropped;
 		DeadPS->TakeAllCards(Dropped);
 		for (const FBaamCardInstance& Card : Dropped)

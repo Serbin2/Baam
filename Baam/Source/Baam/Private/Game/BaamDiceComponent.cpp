@@ -1,5 +1,7 @@
 #include "Game/BaamDiceComponent.h"
 #include "Game/BaamGameplayTags.h"
+#include "AbilitySystemComponent.h"
+#include "Player/Component/BaamAttributeSet.h"
 
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
@@ -142,6 +144,39 @@ FBaamOutcomeWeights UBaamDiceComponent::ApplyLuck(const FBaamOutcomeWeights& Bas
 	{
 		Out.ApplyBonus(Luck * LuckSuccessWeightPerPoint, Luck * LuckCriticalWeightPerPoint);
 	}
+	return Out;
+}
+
+FBaamOutcomeWeights UBaamDiceComponent::ApplyModifiers(const FBaamOutcomeWeights& Base,
+	const UAbilitySystemComponent* SourceASC) const
+{
+	FBaamOutcomeWeights Out = Base;
+	if (!SourceASC)
+	{
+		return Out;
+	}
+
+	const UBaamAttributeSet* AS = SourceASC->GetSet<UBaamAttributeSet>();
+	if (!AS)
+	{
+		return Out;
+	}
+
+	//	1) 승산 먼저 — 무효화(큰 음수 가산)가 배율에 흔들리지 않도록.
+	//	   실패 등급에는 승산을 두지 않았다(필요한 카드가 없다 — GDD §7.2 최소 집합 권고).
+	Out.ApplyMultiplier(
+		AS->GetWeightMultCriticalFailure(),
+		/*MultS=*/1.f,
+		AS->GetWeightMultCriticalSuccess());
+
+	//	2) 가산 — 어트리뷰트 보정 + 행운.
+	const int32 Luck = FMath::RoundToInt(AS->GetLuck());
+	Out.ApplyBonusAll(
+		FMath::RoundToInt(AS->GetWeightBonusCriticalFailure()),
+		FMath::RoundToInt(AS->GetWeightBonusFailure()),
+		FMath::RoundToInt(AS->GetWeightBonusSuccess()) + Luck * LuckSuccessWeightPerPoint,
+		FMath::RoundToInt(AS->GetWeightBonusCriticalSuccess()) + Luck * LuckCriticalWeightPerPoint);
+
 	return Out;
 }
 

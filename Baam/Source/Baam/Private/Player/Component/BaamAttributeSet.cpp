@@ -17,6 +17,14 @@ UBaamAttributeSet::UBaamAttributeSet()
 	InitDrawCount(2.f);
 	InitDrawBangCount(1.f);
 
+	// 판정 비율 보정 — 가산은 0(보정 없음), 승산은 1.0(그대로).
+	InitWeightBonusCriticalFailure(0.f);
+	InitWeightBonusFailure(0.f);
+	InitWeightBonusSuccess(0.f);
+	InitWeightBonusCriticalSuccess(0.f);
+	InitWeightMultCriticalFailure(1.f);
+	InitWeightMultCriticalSuccess(1.f);
+
 	// 능력치 — 기본 0 (보정 없음). 실제 값은 캐릭터 Row 의 GE 로 세팅한다.
 	InitStrength(0.f);
 	InitAgility(0.f);
@@ -39,6 +47,12 @@ void UBaamAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, MissedRequired,    COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DrawCount,         COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, DrawBangCount,     COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightBonusCriticalFailure, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightBonusFailure,         COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightBonusSuccess,         COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightBonusCriticalSuccess, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightMultCriticalFailure,  COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, WeightMultCriticalSuccess,  COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Strength,          COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Agility,           COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UBaamAttributeSet, Intelligence,      COND_None, REPNOTIFY_Always);
@@ -57,6 +71,15 @@ void UBaamAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, 
 	else if (Attribute == GetMaxHealthAttribute())
 	{
 		NewValue = FMath::Max(NewValue, 1.f);
+	}
+	else if (Attribute == GetWeightBonusCriticalFailureAttribute()
+		|| Attribute == GetWeightBonusFailureAttribute()
+		|| Attribute == GetWeightBonusSuccessAttribute()
+		|| Attribute == GetWeightBonusCriticalSuccessAttribute())
+	{
+		//	가산 비율 보정은 음수를 허용한다 — 큰 음수로 등급을 무효화하는 장비가 있다
+		//	(드워프 장갑: 실패 비율을 0 으로). 0 클램프하면 그 카드가 동작하지 않는다.
+		//	최종 비율은 정규화 단계에서 0 아래로 내려가지 않도록 처리된다.
 	}
 	else
 	{
@@ -131,6 +154,30 @@ void UBaamAttributeSet::OnRep_DrawCount(const FGameplayAttributeData& OldValue)
 void UBaamAttributeSet::OnRep_DrawBangCount(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, DrawBangCount, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightBonusCriticalFailure(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightBonusCriticalFailure, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightBonusFailure(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightBonusFailure, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightBonusSuccess(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightBonusSuccess, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightBonusCriticalSuccess(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightBonusCriticalSuccess, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightMultCriticalFailure(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightMultCriticalFailure, OldValue);
+}
+void UBaamAttributeSet::OnRep_WeightMultCriticalSuccess(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(UBaamAttributeSet, WeightMultCriticalSuccess, OldValue);
 }
 void UBaamAttributeSet::OnRep_Strength(const FGameplayAttributeData& OldValue)
 {

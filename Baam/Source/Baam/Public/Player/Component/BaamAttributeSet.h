@@ -81,6 +81,42 @@ public:
 	FGameplayAttributeData DrawBangCount;
 	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, DrawBangCount)
 
+	// ── 판정 비율 보정 (GDD §7.2 / §4.2) ─────────────────────────
+	//  장비·캐릭터·상태가 GE 로 이 값을 바꿔 카드 판정 확률을 조정한다.
+	//
+	//  적용 순서 (GDD §14 "보정 합산 방식" 을 여기서 확정):
+	//    카드 기본 비율 × 승산(WeightMult*) + 가산(WeightBonus* + 행운) → 0 클램프 → 정규화
+	//  승산을 먼저 적용하는 이유: 큰 음수 가산으로 등급을 "무효화" 하는 장비(드워프 장갑)가
+	//  배율에 흔들리지 않아야 한다.
+	//
+	//  ⚠️ 가산 보정은 음수가 될 수 있다(무효화 용도). PreAttributeChange 의 0 클램프에서 제외된다.
+	//  GDD §7.2 권고대로 최소 집합만 둔다 — 승산은 극단 등급(대실패/대성공)만 필요하다.
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightBonusCriticalFailure, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightBonusCriticalFailure;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightBonusCriticalFailure)
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightBonusFailure, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightBonusFailure;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightBonusFailure)
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightBonusSuccess, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightBonusSuccess;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightBonusSuccess)
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightBonusCriticalSuccess, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightBonusCriticalSuccess;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightBonusCriticalSuccess)
+
+	//  승산 — 기본 1.0. 마녀의 부적이 +1.0 을 더해 ×2 를 만든다.
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightMultCriticalFailure, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightMultCriticalFailure;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightMultCriticalFailure)
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WeightMultCriticalSuccess, Category = "Bang|Outcome")
+	FGameplayAttributeData WeightMultCriticalSuccess;
+	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightMultCriticalSuccess)
+
 	// ── 능력치(RPG 스탯) 4종 ──────────────────────────────────────
 	//  주사위 판정/데미지에 붙는 보정치. 캐릭터 Row 의 GE 로 세팅한다.
 	//  힘   : 뱅 데미지 배율 (내가 줄 피해가 커진다)
@@ -119,6 +155,12 @@ protected:
 	UFUNCTION() void OnRep_MissedRequired(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_DrawCount(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_DrawBangCount(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightBonusCriticalFailure(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightBonusFailure(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightBonusSuccess(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightBonusCriticalSuccess(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightMultCriticalFailure(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_WeightMultCriticalSuccess(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_Strength(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_Agility(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_Intelligence(const FGameplayAttributeData& OldValue);

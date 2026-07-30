@@ -7,9 +7,13 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "GameplayTagContainer.h"
+#include "Game/BaamCardType.h"      // FBaamCardInstance / FBaamPendingStatus
+#include "ActiveGameplayEffectHandle.h"
+#include "Templates/SubclassOf.h"
 #include "BaamPlayerState.generated.h"
 
 struct FBaamCardInstance;
+class UGameplayEffect;
 class UBaamReadyComponent;
 
 /** 손패 내용이 바뀌었다. UI 는 여기에 구독해 갱신한다. */
@@ -59,6 +63,21 @@ public:
 	//	장착 중인 파란 카드. 공개 정보라 전원에게 복제된다.
 	const TArray<FBaamCardInstance>& GetEquipment() const { return Equipment; }
 
+	// ── 장비(파란 카드) 장착 ──
+	//
+	// 장비는 지속 효과다 — EquipEffect(Infinite GE)를 ASC 에 붙여 어트리뷰트를 바꾼다.
+	// ⚠️ GE 핸들 생명주기를 Equipment 배열과 같은 곳에서 관리해야 한다.
+	//    배열만 비우고 GE 를 남기면 "장비는 없는데 효과는 계속" 이 된다(사망 처리에서 실제로 발생).
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Equip")
+	bool HasEquippedCard(FName CardId) const;
+
+	/** 서버 전용. 같은 종류를 이미 장착했으면 false(중복 장착 금지). */
+	bool EquipCard(const FBaamCardInstance& Card, TSubclassOf<UGameplayEffect> EquipEffect);
+
+	/** 서버 전용. 장착을 해제하고 카드를 돌려준다. GE 도 함께 제거된다. */
+	bool UnequipCard(FName CardId, FBaamCardInstance& OutRemoved);
+
 	// ── 턴당 카드 사용 (GDD §5.2 / §7.1) ──
 	//
 	// 한도는 어트리뷰트 CardUseLimit 이 갖고, "이번 턴에 몇 장 썼는가" 만 여기서 센다.
@@ -70,6 +89,37 @@ public:
 	//	서버 전용.
 	void ResetCardsUsedThisTurn();
 	void IncrementCardsUsedThisTurn();
+
+	/**
+	 * 사용 횟수를 되돌린다 ("카드 사용한도 회복" 효과 / 발동 실패 롤백).
+	 * 0 미만으로는 내려가지 않는다 — 이번 턴에 쓴 만큼까지만 회복된다.
+	 * 실제로 되돌린 횟수를 반환한다.
+	 */
+	int32 DecrementCardsUsedThisTurn(int32 Count = 1);
+
+	// ── "다음 1회" 대기 상태 (Status.*) ──
+	//
+	// 약점 포착 / 함정 / 준비 / 대비가 여기에 쌓인다. 발동되면 소모된다.
+	// 중첩은 허용하지 않는다 — 이미 가진 상태를 주는 카드는 사용 자체가 거부된다.
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Status")
+	bool HasPendingStatus(FGameplayTag StatusTag) const;
+
+	/** 없으면 0. 약점 포착의 피해 증가량처럼 수치가 있는 상태에 쓴다. */
+	UFUNCTION(BlueprintPure, Category = "Baam|Status")
+	int32 GetPendingStatusAmount(FGameplayTag StatusTag) const;
+
+	UFUNCTION(BlueprintPure, Category = "Baam|Status")
+	const TArray<FBaamPendingStatus>& GetPendingStatuses() const { return PendingStatuses; }
+
+	/** 서버 전용. 이미 같은 태그가 있으면 아무것도 하지 않고 false (중첩 금지). */
+	bool AddPendingStatus(FGameplayTag StatusTag, int32 Amount);
+
+	/** 서버 전용. 있으면 수치를 돌려주고 제거한다(소모). 없으면 false. */
+	bool ConsumePendingStatus(FGameplayTag StatusTag, int32& OutAmount);
+
+	/** 서버 전용. 전부 지운다(사망 등). */
+	void ClearPendingStatuses();
 
 	// ── 역할 공개 ──
 	//
@@ -129,5 +179,15 @@ private:
 
 	UPROPERTY(Replicated)
 	int32 CardsUsedThisTurn = 0;           // 전원 공개 (턴 UI 표시용)
+
+	//	전원 공개 — 상대가 어떤 상태를 걸고 있는지는 공개 정보다(함정을 걸었다는 사실 등).
+	UPROPERTY(Replicated)
+	TArray<FBaamPendingStatus> PendingStatuses;
+
+	//	장비 GE 핸들. 서버 전용 — 복제하지 않는다(클라는 Equipment 배열만 보면 된다).
+	TMap<FName, FActiveGameplayEffectHandle> EquipEffectHandles;
+
+	/** 이 PlayerState 가 조종하는 폰의 ASC. 없으면 nullptr. */
+	class UAbilitySystemComponent* GetOwnedAbilitySystemComponent() const;
 
 };

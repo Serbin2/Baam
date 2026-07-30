@@ -11,6 +11,7 @@
 #include "Game/BaamDataSubsystem.h"           // GetCardRow
 #include "Game/BaamGameDataTypes.h"           // FBaamCardRow
 #include "Game/BaamDiceComponent.h"           // 4단계 판정
+#include "Game/BaamGameplayTags.h"           // Bang::Status::*
 #include "Game/BaamGameState.h"               // PushToDiscard
 #include "Player/Component/BaamAttributeSet.h" // Luck
 #include "Game/BaamPlayerState.h"
@@ -510,6 +511,7 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	FGameplayTag CardId;    // 맵 조회 키 (Card.Id.*)
 	FGameplayTag EventTag;  // 페이로드/로그용 메커니즘 태그 (Ability.*)
 	const FBaamCardRow* CardRow = nullptr;   // 판정 데이터 (OutcomeWeights / OutcomeMagnitudes)
+	FName CardCardId = NAME_None;            // DT Row 이름 (장비 중복 검사용)
 	if (const ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
 	{
 		const UGameInstance* GI = GetGameInstance();
@@ -521,9 +523,10 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 			{
 				if (const FBaamCardRow* Row = Data ? Data->GetCardRow(Card.CardId) : nullptr)
 				{
-					CardId   = Row->CardIdTag;
-					EventTag = Row->AbilityEventTag;
-					CardRow  = Row;   //	판정 비율·등급별 수치를 아래에서 읽는다
+					CardId     = Row->CardIdTag;
+					EventTag   = Row->AbilityEventTag;
+					CardRow    = Row;        //	판정 비율·등급별 수치를 아래에서 읽는다
+					CardCardId = Card.CardId; //	장비 중복 검사용 Row 이름
 				}
 				break;
 			}
@@ -565,14 +568,110 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	}
 	TSubclassOf<UGameplayAbility> AbilityClass = *Found;
 
+	// ── 중첩 차단 (Additional-Card-List: 중첩 사용 불가) ──
+	//	이 카드가 어느 등급에서든 부여하는 Status.* 를 받는 쪽이 이미 갖고 있으면 사용 자체를 막는다.
+	//	카드를 소비한 뒤에 막으면 카드만 날리게 되므로 반드시 소비 "전" 에 검사한다.
+	//	검사 목록을 DT 에 따로 두지 않고 효과 목록에서 유도한다 — 두 곳에 적으면 어긋난다.
+	if (CardRow)
+	{
+		const ABaamPlayerState* SelfPS   = GetPlayerState<ABaamPlayerState>();
+		const ABaamPlayerState* TargetPSCheck = nullptr;
+		if (const APawn* TargetPawn = Cast<APawn>(ResolveTargetActor(TargetSeat)))
+		{
+			TargetPSCheck = TargetPawn->GetPlayerState<ABaamPlayerState>();
+		}
+
+		const TArray<FBaamCardEffect>* AllTiers[] = {
+			&CardRow->OutcomeEffects.CriticalFailure, &CardRow->OutcomeEffects.Failure,
+			&CardRow->OutcomeEffects.Success,         &CardRow->OutcomeEffects.CriticalSuccess };
+
+		for (const TArray<FBaamCardEffect>* Tier : AllTiers)
+		{
+			for (const FBaamCardEffect& Effect : *Tier)
+			{
+				if (Effect.Op != EBaamCardEffectOp::ApplyStatus || !Effect.StatusTag.IsValid())
+				{
+					continue;
+				}
+
+				const ABaamPlayerState* Recipient = Effect.bToTarget ? TargetPSCheck : SelfPS;
+				if (Recipient && Recipient->HasPendingStatus(Effect.StatusTag))
+				{
+					BaamDebug::Screen(
+						FString::Printf(TEXT("[서버] %s 는 이미 %s 상태입니다 — 중첩할 수 없어 사용 거부."),
+							Effect.bToTarget ? TEXT("대상") : TEXT("본인"),
+							*Effect.StatusTag.GetTagName().ToString()),
+						FColor::Orange, /*Time=*/5.f);
+					return;
+				}
+			}
+		}
+	}
+
 	// ── 대상/시전자 페이로드 구성 (뱅처럼 TargetSeat 이 있는 카드는 대상 폰을 넘긴다) ──
 	FGameplayEventData Payload;
 	Payload.EventTag = EventTag;
 	Payload.Instigator = GetPawn();
+
+	//	어느 카드가 발동했는지 GA 가 알 수 있게 Card.Id.* 를 함께 실어 보낸다.
+	//	범용 실행기(UGA_BaamCardEffects)가 이 태그로 효과 목록을 조회한다.
+	//	Resolution.* 와 같은 컨테이너를 쓰지만 접두사가 달라 충돌하지 않는다.
+	Payload.InstigatorTags.AddTag(CardId);
 	if (AActor* TargetActor = ResolveTargetActor(TargetSeat))
 	{
 		Payload.Target = TargetActor;
 	}
+
+	// ── 파란 카드(장비): 판정 없이 즉시 장착 (GDD §6.3) ──
+	//	장비는 지속 효과라 판정 대상이 아니다. GA 도 발동하지 않는다.
+	//	⚠️ 카드가 버린 패로 가지 않는다 — 손패에서 장비로 "이동" 한다.
+	//	   그래서 ConsumeCard(버리기)를 쓰지 않고 직접 옮긴다.
+	if (CardRow->TypeTag == Bang::Card::Type::Blue.GetTag())
+	{
+		ABaamPlayerState* EquipPS = GetPlayerState<ABaamPlayerState>();
+		if (!EquipPS)
+		{
+			return;
+		}
+
+		if (EquipPS->HasEquippedCard(CardCardId))
+		{
+			BaamDebug::Screen(
+				FString::Printf(TEXT("[서버] %s 는 이미 장착 중입니다 — 중복 장착 불가."),
+					*CardRow->DisplayName.ToString()),
+				FColor::Orange, /*Time=*/5.f);
+			return;
+		}
+
+		FBaamCardInstance Moved;
+		if (!EquipPS->RemoveCardFromHand(InstanceId, Moved))
+		{
+			return;
+		}
+
+		if (!EquipPS->EquipCard(Moved, CardRow->EquipEffect))
+		{
+			//	장착 실패 — 카드를 손패로 되돌린다(카드만 사라지면 안 된다).
+			EquipPS->AddCardToHand(Moved);
+			return;
+		}
+
+		//	장비 설치도 카드 사용 횟수를 소비한다.
+		//	GDD §5.3 이 미결정으로 둔 항목 — "소비한다" 로 우선 확정했다.
+		//	바꾸려면 이 한 줄만 지우면 된다.
+		EquipPS->IncrementCardsUsedThisTurn();
+
+		BaamDebug::Screen(
+			FString::Printf(TEXT("장착  %s → %s"),
+				*CardRow->DisplayName.ToString(),
+				GetPawn() ? *GetPawn()->GetName() : TEXT("?")),
+			FColor(120, 200, 255), /*Time=*/5.f);
+		return;
+	}
+
+	//	판정 결과를 아래 "대비" 처리에서 쓴다(블록 밖에서 보이도록 선언).
+	EBaamDiceOutcome ResolvedOutcome = EBaamDiceOutcome::Success;
+	bool bResolved = false;
 
 	// ── 4단계 판정 (GDD §4.2 / §9.1) ──
 	//	판정은 서버가 여기서 한 번만 한다. GA 는 "결과 실행" 만 담당한다 —
@@ -584,20 +683,77 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 
 		if (Dice && CardRow)
 		{
-			//	행운 보정을 비율에 더한다(GDD §4.2 — 보정은 비율에 반영).
+			//	행운 + 비율 보정 어트리뷰트(장비·상태)를 모두 반영한다(GDD §4.2 / §7.2).
+			//	순서는 승산 → 가산 → 0 클램프 (UBaamDiceComponent::ApplyModifiers).
 			int32 Luck = 0;
 			if (const UBaamAttributeSet* AS = ASC->GetSet<UBaamAttributeSet>())
 			{
 				Luck = FMath::RoundToInt(AS->GetLuck());
 			}
-			const FBaamOutcomeWeights Weights = Dice->ApplyLuck(CardRow->OutcomeWeights, Luck);
+			const FBaamOutcomeWeights Weights = Dice->ApplyModifiers(CardRow->OutcomeWeights, ASC);
 
 			int32 Roll = INDEX_NONE;
-			const EBaamDiceOutcome Outcome = Dice->RollOutcome(Weights, Roll);
+			EBaamDiceOutcome Outcome = Dice->RollOutcome(Weights, Roll);
+
+			//	── "다음 1회" 판정 강제 (준비 / 함정) ──
+			//	상태를 소모해 굴린 결과를 덮어쓴다. 굴림 자체는 먼저 소비해 난수 수열을
+			//	일정하게 유지한다(강제 여부에 따라 이후 판정이 밀리지 않도록).
+			if (ABaamPlayerState* CasterPS = GetPlayerState<ABaamPlayerState>())
+			{
+				//	우선순위: 강한 강제(대성공/대실패)를 먼저 본다.
+				struct FForceRule { FGameplayTag Tag; EBaamDiceOutcome Forced; };
+				const FForceRule Rules[] = {
+					{ Bang::Status::NextCard::ForceCriticalSuccess.GetTag(), EBaamDiceOutcome::CriticalSuccess },
+					{ Bang::Status::NextCard::ForceCriticalFailure.GetTag(), EBaamDiceOutcome::CriticalFailure },
+					{ Bang::Status::NextCard::ForceSuccess.GetTag(),         EBaamDiceOutcome::Success },
+					{ Bang::Status::NextCard::ForceFailure.GetTag(),         EBaamDiceOutcome::Failure },
+				};
+
+				for (const FForceRule& Rule : Rules)
+				{
+					int32 Unused = 0;
+					if (!CasterPS->HasPendingStatus(Rule.Tag))
+					{
+						continue;
+					}
+
+					//	함정 예외 규칙(Additional-Card-List): 강제할 등급의 비율이 0 인 카드에는
+					//	강제가 통하지 않는다. 그래도 상태는 소모된다 — "효과를 없앨 수 있음".
+					const bool bTierPossible =
+						(Rule.Forced == EBaamDiceOutcome::CriticalSuccess && Weights.CriticalSuccess > 0) ||
+						(Rule.Forced == EBaamDiceOutcome::Success         && Weights.Success > 0) ||
+						(Rule.Forced == EBaamDiceOutcome::Failure         && Weights.Failure > 0) ||
+						(Rule.Forced == EBaamDiceOutcome::CriticalFailure && Weights.CriticalFailure > 0);
+
+					CasterPS->ConsumePendingStatus(Rule.Tag, Unused);
+
+					if (bTierPossible)
+					{
+						Outcome = Rule.Forced;
+						BaamDebug::Screen(
+							FString::Printf(TEXT("[강제] %s → 판정을 %s 로 고정"),
+								*Rule.Tag.GetTagName().ToString(),
+								*UBaamDiceComponent::GetOutcomeText(Rule.Forced).ToString()),
+							FColor(200, 120, 255), /*Time=*/5.f);
+					}
+					else
+					{
+						BaamDebug::Screen(
+							FString::Printf(TEXT("[강제] %s 는 이 카드에 통하지 않습니다(해당 등급 비율 0) — 상태만 소모."),
+								*Rule.Tag.GetTagName().ToString()),
+							FColor(160, 160, 160), /*Time=*/5.f);
+					}
+					break;   // 강제는 한 번만 적용한다
+				}
+			}
+
 			const int32 Magnitude = CardRow->OutcomeMagnitudes.ForOutcome(Outcome);
 
 			Payload.InstigatorTags.AddTag(UBaamDiceComponent::OutcomeToTag(Outcome));
 			Payload.EventMagnitude = static_cast<float>(Magnitude);
+
+			ResolvedOutcome = Outcome;
+			bResolved = true;
 
 			float CF = 0.f, F = 0.f, S = 0.f, CS = 0.f;
 			UBaamDiceComponent::GetOutcomeChances(Weights, CF, F, S, CS);
@@ -631,6 +787,15 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 
 	// 카드 주도 발동 (md §1.1): 서버 권위로 즉석 부여+1회 발동. 페이로드가 GA 의 TriggerEventData 로 전달된다.
 	FGameplayAbilitySpec Spec(AbilityClass, /*Level=*/1, /*InputID=*/INDEX_NONE, /*SourceObject=*/this);
+	//	사용 횟수를 발동 "전" 에 센다.
+	//	GA 안의 "카드 사용한도 회복" 효과가 이 카드의 소비를 되돌릴 수 있어야 하는데,
+	//	발동 후에 세면 회복이 아직 0 인 값에 작용해 아무 효과가 없어진다.
+	ABaamPlayerState* MyPS = GetPlayerState<ABaamPlayerState>();
+	if (MyPS)
+	{
+		MyPS->IncrementCardsUsedThisTurn();
+	}
+
 	const FGameplayAbilitySpecHandle ActivatedHandle = ASC->GiveAbilityAndActivateOnce(Spec, &Payload);
 
 	// GiveAbilityAndActivateOnce 는 발동에 실패하면 ClearAbility 후 무효 핸들을 돌려준다
@@ -639,6 +804,12 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	// GA 매핑 오류나 ActivationBlockedTags(State.Dead 등)로 카드가 조용히 사라지면 추적이 어렵다.
 	if (!ActivatedHandle.IsValid())
 	{
+		//	발동 실패 — 미리 센 사용 횟수를 되돌린다.
+		if (MyPS)
+		{
+			MyPS->DecrementCardsUsedThisTurn();
+		}
+
 		BaamDebug::Screen(
 			FString::Printf(TEXT("[서버] %s 발동 실패 — 카드 #%d 는 손패에 그대로 둡니다."),
 				*AbilityClass->GetName(), InstanceId),
@@ -650,17 +821,32 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 	// (뱅!이 빗나가도 그 뱅! 카드는 돌아오지 않는다)
 	ConsumeCard(InstanceId);
 
-	//	판정 실패도 사용 횟수를 소비한다 (GDD §5.3).
-	//	⚠️ ConsumeCard 안이 아니라 여기서 센다 — ConsumeCard 는 버리기도 함께 쓰는데
-	//	   버리기는 "카드 사용" 이 아니라 사용 횟수를 소비하면 안 된다.
-	if (ABaamPlayerState* PS = GetPlayerState<ABaamPlayerState>())
+	//	사용 횟수는 발동 전에 이미 셌다(위 참조). 판정 실패도 소비된다 (GDD §5.3) —
+	//	실패 여부는 GA 안에서 갈리므로 여기서는 아무 조건도 보지 않는다.
+	//	── 대비(Status.NextCard.KeepCardUse) ──
+	//	실패·대실패했다면 이 카드의 사용 횟수를 되돌린다. 상태는 결과와 무관하게 소모된다
+	//	("다음에 사용하는 카드" 를 이미 썼으므로).
+	if (MyPS && bResolved && MyPS->HasPendingStatus(Bang::Status::NextCard::KeepCardUse.GetTag()))
 	{
-		PS->IncrementCardsUsedThisTurn();
+		int32 Unused = 0;
+		MyPS->ConsumePendingStatus(Bang::Status::NextCard::KeepCardUse.GetTag(), Unused);
 
+		const bool bFailed = (ResolvedOutcome == EBaamDiceOutcome::Failure
+			|| ResolvedOutcome == EBaamDiceOutcome::CriticalFailure);
+
+		if (bFailed && MyPS->DecrementCardsUsedThisTurn(1) > 0)
+		{
+			BaamDebug::Screen(TEXT("[대비] 실패했지만 카드 사용한도를 잃지 않았습니다."),
+				FColor(120, 220, 160), /*Time=*/5.f);
+		}
+	}
+
+	if (MyPS)
+	{
 		if (const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr)
 		{
 			UE_LOG(LogBaamCard, Log, TEXT("[Turn] 좌석 %d 카드 사용 %d / %d"),
-				GetMySeatIndex(), PS->GetCardsUsedThisTurn(), GS->GetCardUseLimitForSeat(GetMySeatIndex()));
+				GetMySeatIndex(), MyPS->GetCardsUsedThisTurn(), GS->GetCardUseLimitForSeat(GetMySeatIndex()));
 		}
 	}
 }
