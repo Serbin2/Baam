@@ -22,7 +22,7 @@ UGA_StealOrDiscard::UGA_StealOrDiscard()
 
 namespace
 {
-	ABaamPlayerState* PlayerStateFromActor(AActor* Actor)
+	ABaamPlayerState* StealPlayerStateFromActor(AActor* Actor)
 	{
 		const APawn* Pawn = Cast<APawn>(Actor);
 		return Pawn ? Pawn->GetPlayerState<ABaamPlayerState>() : nullptr;
@@ -74,7 +74,7 @@ void UGA_StealOrDiscard::ActivateAbility(
 	}
 
 	AActor* TargetActor = TriggerEventData ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
-	ABaamPlayerState* TargetPS = PlayerStateFromActor(TargetActor);
+	ABaamPlayerState* TargetPS = StealPlayerStateFromActor(TargetActor);
 	if (!TargetPS)
 	{
 		UE_LOG(LogBaamCard, Warning,
@@ -83,7 +83,7 @@ void UGA_StealOrDiscard::ActivateAbility(
 		return;
 	}
 
-	ABaamPlayerState* SourcePS = PlayerStateFromActor(Avatar);
+	ABaamPlayerState* SourcePS = StealPlayerStateFromActor(Avatar);
 	const UWorld* World = Avatar ? Avatar->GetWorld() : nullptr;
 	ABaamGameState* GS  = World ? World->GetGameState<ABaamGameState>() : nullptr;
 	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);
