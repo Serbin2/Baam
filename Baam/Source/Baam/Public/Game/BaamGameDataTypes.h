@@ -79,10 +79,14 @@ struct FBaamOutcomeWeights
 };
 
 /**
- * 판정 등급별 효과 수치 (GDD §4.3). 카드에 따라 피해량·회복량·뽑는 장수 등으로 해석된다.
+ * [비활성] 판정 등급별 효과 수치 — 등급당 정수 하나.
  *
- * GDD §4.1: `실패`는 효과가 발생하지 않는 것이 기본안이므로 0 이다.
- * GDD §4.4: `대실패`가 모든 카드에 불이익을 강제하지 않는다 — 필요 없으면 0 으로 둔다.
+ * FBaamOutcomeEffects(효과 목록)로 대체됐다. 카드 데이터를 채울 필드가 둘이면
+ * "어느 쪽을 채워야 하는지" 가 카드마다 달라지고, 잘못 채워도 조용히 효과 0 이 된다
+ * (실제로 뱅의 피해가 안 들어가는 문제로 한 번 겪었다).
+ *
+ * 남겨 두는 이유: 전용 GA 폴백 경로(EventMagnitude)가 아직 이 값을 읽는다.
+ * 새 카드는 반드시 OutcomeEffects 를 쓸 것 (GDD §13.1 비활성 처리).
  */
 USTRUCT(BlueprintType)
 struct FBaamOutcomeMagnitudes
@@ -111,6 +115,12 @@ struct FBaamOutcomeMagnitudes
 		case EBaamDiceOutcome::CriticalFailure: return CriticalFailure;
 		default:                                return 0;
 		}
+	}
+
+	/** 전부 0 이면 이 카드는 수치 방식을 쓰지 않는다(또는 채우는 것을 잊었다). */
+	bool IsAllZero() const
+	{
+		return CriticalFailure == 0 && Failure == 0 && Success == 0 && CriticalSuccess == 0;
 	}
 };
 
@@ -306,8 +316,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
 	FBaamOutcomeWeights OutcomeWeights;
 
-	//	등급별 효과 수치. 카드에 따라 피해량·회복량·장수 등으로 해석된다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
+	//	[비활성] 등급별 단일 수치. OutcomeEffects 로 대체됐다 — 전용 GA 폴백 전용이다.
+	//	  새 카드는 채우지 말 것. 아래 OutcomeEffects 가 정식 경로다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome|Deprecated")
 	FBaamOutcomeMagnitudes OutcomeMagnitudes;
 
 	//	이 카드가 받을 수 있는 보정의 종류 (GDD §4.3 "보정 허용 태그").
@@ -316,10 +327,12 @@ public:
 	FGameplayTagContainer ModifierTags;
 
 	/**
-	 * 등급별 효과 목록. 한 등급에 여러 효과를 넣을 수 있다(속공·휴식 등).
+	 * 등급별 효과 목록 — **모든 카드의 정식 경로**다.
 	 *
-	 * 이걸 채운 카드는 GA 를 따로 만들지 않고 UGA_BaamCardEffects(범용 실행기)에 매핑한다.
-	 * 비워 두면 기존 전용 GA 경로를 쓴다 — 그때는 위 OutcomeMagnitudes 가 수치를 전달한다.
+	 * 한 등급에 여러 효과를 넣을 수 있다(속공·휴식 등). 파란 카드(장비)를 제외한
+	 * 모든 갈색 카드가 이걸 채우고 UGA_BaamCardEffects(범용 실행기)에 매핑된다.
+	 *
+	 * ⚠️ 비워 두면 카드를 써도 아무 일이 일어나지 않는다. Baam_DumpDeck 이 경고한다.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
 	FBaamOutcomeEffects OutcomeEffects;

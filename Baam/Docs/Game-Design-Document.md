@@ -380,7 +380,39 @@ Modifier.CriticalRate
 | 행운 판정 보정 (`ApplyLuck`) | `UBaamDiceComponent` | 선언·구현 유지, **호출처 없음** — 아래 참조 |
 | `LuckSuccessWeightPerPoint` / `LuckCriticalWeightPerPoint` | `UBaamDiceComponent` | 설정 유지, 읽는 곳 없음 (`ApplyLuck` 전용) |
 | `FBaamOutcomeWeights::ApplyBonus` (2인자) | `BaamGameDataTypes.h` | `ApplyLuck` 전용 — 4인자 `ApplyBonusAll` 이 정식 경로 |
-| `Luck` / `Agility` 어트리뷰트 | `UBaamAttributeSet` | 선언 유지 — 읽는 곳이 비활성 `GA_Missed` 하나뿐이라 연쇄 비활성 |
+| 능력치 4종 (`Strength` / `Agility` / `Intelligence` / `Luck`) | `UBaamAttributeSet` | 선언·캐릭터 GE 세팅 유지, **어떤 규칙도 읽지 않음** — 아래 참조 |
+| `StrengthDamageMult` / `IntelligenceMitigation` | `UGA_BaamCardEffects` | 프로퍼티 유지, 참조 제거 |
+| `FBaamOutcomeMagnitudes` (등급별 단일 수치) | `BaamGameDataTypes.h` | 필드 유지, **전부 0 으로 비워 둠** — `OutcomeEffects` 로 통합 (아래 참조) |
+| `GA_Bang` / `GA_Heal` / `GA_StealOrDiscard` | `Player/Ability/` | 구현 유지, `AbilityByCardId` 매핑 제외 — 범용 실행기가 대체 |
+
+#### 카드 효과 스키마를 하나로 통합한 이유
+
+등급별 수치(`OutcomeMagnitudes`)와 효과 목록(`OutcomeEffects`) 두 필드가 공존하던 동안,
+**카드마다 채워야 하는 필드가 달랐고 잘못 채워도 아무 경고가 없었다.**
+실제로 뱅의 피해가 들어가지 않는 문제를 겪었는데 — 판정도, GA 발동도, 카드 소비도 모두
+정상이고 피해량만 0 이라 원인을 짚기 어려웠다.
+
+이제 모든 갈색 카드가 `OutcomeEffects` 하나만 채우고 `UGA_BaamCardEffects` 로 매핑된다.
+`Baam_DumpDeck` 이 빈 효과 데이터를 `[!! 효과 데이터 없음]` 으로 경고한다.
+
+**되살리는 법**: 전용 GA 가 필요한 카드가 생기면(복잡한 연출·다단 판정 등)
+해당 카드만 `AbilityByCardId` 에서 전용 GA 로 매핑하고 `OutcomeMagnitudes` 를 채운다.
+전용 GA 들은 `EventMagnitude` 폴백 경로를 그대로 갖고 있다.
+
+#### 능력치 4종을 비활성한 이유
+
+§7.1 의 **확정 스탯은 `CardUseLimit` 하나뿐**이고, §7.2 도 *"초기 프로토타입에서는 `CardUseLimit`과
+소수의 확률 보정만 사용하는 것을 권장"* 한다. 네 스탯은 그 권고보다 앞서 들어와 있었다.
+
+- **힘 / 지능** — 지능 1 이 `round(1 × 0.5) = 1` 로 피해 1 을 통째로 상쇄해
+  "판정은 성공인데 피해 0" 이 되는 문제가 있었다. 카드 수치가 곧 피해여야
+  §10 의 효과 표시와 §11 의 밸런스 지표가 성립한다.
+- **행운** — 판정 비율에 섞이면 DT 비율이 곧 표시 확률이 아니게 된다(아래 참조).
+- **민첩** — 읽던 곳이 비활성 `GA_Missed` 뿐이라 연쇄 비활성.
+
+**되살리는 법**: 확률 보정은 `WeightBonus*` / `WeightMult*` 어트리뷰트로 환산해 캐릭터 GE 로 부여하고,
+피해 보정은 `UGA_BaamCardEffects::ApplyDamage` 에서 다시 곱한다.
+스탯을 다시 넣을 때는 §7.2 의 경고("스탯 수가 많아지면 카드 확률을 예측하기 어려워진다")를 먼저 볼 것.
 
 #### 행운 보정을 비활성한 이유
 
@@ -419,6 +451,8 @@ Modifier.CriticalRate
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
 | v0.1 | 2026-07-29 | 기본판 기반 원칙, 갈색 카드 확률 판정, 응답 카드 제거, 수트·사거리 제거, 뱅! 제한 제거, 턴당 카드 2장, 자동 장비 판정, 무기 재설계 방향 정리 |
+| v0.5 | 2026-07-31 | 능력치 4종(힘·민첩·지능·행운)을 전면 비활성. 피해는 카드 데이터(`OutcomeEffects`)만으로 결정된다 — 지능 경감이 성공 피해를 0 으로 만들던 문제 해소 |
+| v0.4 | 2026-07-31 | 카드 효과 스키마를 `OutcomeEffects` 하나로 통합. `OutcomeMagnitudes` 와 전용 GA 3종을 §13.2 비활성으로 기록. `Baam_DumpDeck` 에 빈 효과 데이터 진단 추가 |
 | v0.3 | 2026-07-30 | 구현에서 확정된 사항 반영 — 보정 합산 방식(승산→가산→클램프→정규화), 장비 설치는 카드 사용 한도 소비. 행운 판정 보정과 연쇄 항목(`ApplyLuck` / Luck·Agility 어트리뷰트 등)을 §13.2 비활성으로 기록 |
 | v0.2 | 2026-07-30 | 판정을 3단계 → **4단계**(대실패 추가)로 변경. 카드 데이터를 4단계 상대 비율 + 정규화 구조로 정의. "제거" 를 **비활성 처리(경로 차단)** 정책으로 전환하고 §13.1 신설 |
 

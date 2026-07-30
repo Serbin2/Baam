@@ -117,12 +117,21 @@ public:
 	FGameplayAttributeData WeightMultCriticalSuccess;
 	ATTRIBUTE_ACCESSORS(UBaamAttributeSet, WeightMultCriticalSuccess)
 
-	// ── 능력치(RPG 스탯) 4종 ──────────────────────────────────────
-	//  주사위 판정/데미지에 붙는 보정치. 캐릭터 Row 의 GE 로 세팅한다.
-	//  힘   : 뱅 데미지 배율 (내가 줄 피해가 커진다)
-	//  민첩 : 회피 판정 굴림에 가산 (내가 잘 피한다)
-	//  지능 : 받는 데미지 경감 (내가 맞는 피해가 줄어든다)
-	//  행운 : 모든 주사위 판정 굴림에 가산 (뱅·회피 공통, 좋은 눈이 잘 뜬다)
+	// ── [비활성] 능력치(RPG 스탯) 4종 ────────────────────────────
+	//
+	//  ⚠️ 네 스탯 모두 어떤 규칙도 읽지 않는다 (GDD §7.1 / §13.1).
+	//     §7.1 의 확정 스탯은 CardUseLimit 하나뿐이고, §7.2 도 초기 프로토타입에서는
+	//     스탯을 최소로 두라고 권한다. 선언과 캐릭터 GE 세팅은 남기되 참조를 끊었다.
+	//
+	//     끊은 이유:
+	//       힘·지능 — 지능 1(= round(1 × 0.5) = 1)이 피해 1 을 통째로 상쇄해
+	//                 "성공했는데 피해 0" 이 되었다. 카드 수치가 곧 피해여야
+	//                 §10 효과 표시와 §11 밸런스 지표가 성립한다.
+	//       행운   — 판정 비율에 섞이면 DT 비율이 곧 표시 확률이 아니게 된다.
+	//       민첩   — 읽던 곳이 비활성 GA_Missed 뿐이라 연쇄 비활성.
+	//
+	//     되살리는 법: 확률 보정은 WeightBonus* / WeightMult* 어트리뷰트로 환산하고,
+	//     피해 보정은 GA_BaamCardEffects::ApplyDamage 에서 다시 곱한다.
 
 	// 힘 — 뱅 데미지 배율. 1당 GA_Bang 의 StrengthDamageMult 만큼 피해 증가.
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Strength, Category = "Bang|Stat")

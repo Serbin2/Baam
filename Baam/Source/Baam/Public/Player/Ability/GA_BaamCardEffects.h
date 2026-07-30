@@ -37,12 +37,12 @@ public:
 		const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	// 힘 1당 피해 배율 증가분. GA_Bang 과 같은 규칙을 쓴다(두 경로의 피해가 어긋나면 안 된다).
-	UPROPERTY(EditDefaultsOnly, Category = "Bang|Damage", meta = (ClampMin = "0.0"))
+	// [비활성] 힘 배율 / 지능 경감 — 참조하지 않는다 (GDD §7.1 / §13.1).
+	//   피해는 카드 데이터(OutcomeEffects)가 전부 결정한다. 스탯을 되살릴 때 여기부터 본다.
+	UPROPERTY(EditDefaultsOnly, Category = "Bang|Damage|Deprecated", meta = (ClampMin = "0.0"))
 	float StrengthDamageMult = 0.25f;
 
-	// 대상 지능 1당 경감되는 피해량.
-	UPROPERTY(EditDefaultsOnly, Category = "Bang|Damage", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditDefaultsOnly, Category = "Bang|Damage|Deprecated", meta = (ClampMin = "0.0"))
 	float IntelligenceMitigation = 0.5f;
 
 	/** 효과 목록을 순서대로 실행하고 사람이 읽을 요약을 채운다. */

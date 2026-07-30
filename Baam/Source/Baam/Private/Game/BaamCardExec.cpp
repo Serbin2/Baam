@@ -96,15 +96,29 @@ void ABaamGameMode::Baam_DumpDeck()
 	UE_LOG(LogBaamCard, Log, TEXT("===== Baam_DumpDeck ====="));
 
 	int32 NumUnimplemented = 0;
+	int32 NumNoEffectData = 0;
 	for (const TPair<FName, int32>& Pair : Counts)
 	{
+		const FBaamCardRow* Row = Data->GetCardRow(Pair.Key);
+
 		// GA(AbilityEventTag) 도 GE(EquipEffect) 도 없는 카드가 덱에 들어가 있으면
 		// 손패에는 나오지만 사용해도 아무 일이 일어나지 않는다. 구현 진행도 추적용.
-		const FBaamCardRow* Row = Data->GetCardRow(Pair.Key);
 		const bool bUnimplemented = (Row != nullptr) && !Row->AbilityEventTag.IsValid() && !Row->EquipEffect;
 		if (bUnimplemented)
 		{
 			++NumUnimplemented;
+		}
+
+		//	효과 데이터가 비어 있는지 검사한다.
+		//	이게 없으면 "판정도 정상, GA 발동도 정상, 카드 소비도 정상인데 효과만 0" 인
+		//	조용한 실패가 된다 — 뱅의 피해가 안 들어가는 문제로 실제로 한 번 겪었다.
+		//	장비(파란 카드)는 EquipEffect 로 동작하므로 이 검사 대상이 아니다.
+		const bool bIsEquip = (Row != nullptr) && Row->TypeTag == Bang::Card::Type::Blue.GetTag();
+		const bool bNoEffectData = (Row != nullptr) && !bIsEquip
+			&& Row->OutcomeEffects.IsEmpty() && Row->OutcomeMagnitudes.IsAllZero();
+		if (bNoEffectData)
+		{
+			++NumNoEffectData;
 		}
 
 		UE_LOG(LogBaamCard, Log, TEXT("  %-32s %3d 장%s"),
@@ -112,6 +126,7 @@ void ABaamGameMode::Baam_DumpDeck()
 			Pair.Value,
 			(Row == nullptr)  ? TEXT("   [!! DT_BaamCard 에 Row 없음]") :
 			bUnimplemented    ? TEXT("   [미구현: GA/GE 미지정]") :
+			bNoEffectData     ? TEXT("   [!! 효과 데이터 없음 — OutcomeEffects 를 채우세요]") :
 			                    TEXT(""));
 	}
 
@@ -133,6 +148,15 @@ void ABaamGameMode::Baam_DumpDeck()
 			TEXT("GA/GE 미지정 카드 %d 종이 덱에 포함되어 있습니다 (사용해도 효과 없음). "
 			     "구현 전까지 QuantityOfCard 를 0 으로 두면 구현된 카드만으로 테스트할 수 있습니다."),
 			NumUnimplemented);
+	}
+
+	if (NumNoEffectData > 0)
+	{
+		UE_LOG(LogBaamCard, Error,
+			TEXT("효과 데이터가 빈 카드 %d 종이 덱에 있습니다. 사용해도 효과가 0 이지만 "
+			     "판정·GA 발동·카드 소비는 정상 동작하므로 원인을 찾기 어렵습니다. "
+			     "DT_BaamCard 의 OutcomeEffects 를 채우세요."),
+			NumNoEffectData);
 	}
 
 	if (NumDuplicateIds > 0)

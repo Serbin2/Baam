@@ -179,33 +179,32 @@ FString UGA_BaamCardEffects::ApplyDamage(int32 Amount, AActor* Avatar, AActor* T
 		return FString();
 	}
 
-	//	GA_Bang 과 같은 규칙: 힘으로 증폭, 대상 지능으로 경감.
-	//	두 경로가 다른 공식을 쓰면 "같은 피해 1 인데 카드마다 다르게 들어간다" 가 된다.
-	//	약점 포착(Status.NextAttack.DamageBonus)을 소모해 기본 피해에 더한다.
-	//	힘 배율보다 먼저 더한다 — "약점을 노려 더 깊이 박힌다" 가 배율의 영향을 받는 쪽이 자연스럽다.
-	int32 Base = Amount;
+	//	피해는 카드 데이터가 전부 결정한다.
+	//
+	//	[비활성] 힘 배율 / 대상 지능 경감은 쓰지 않는다 (GDD §7.1 / §13.1).
+	//	  확정 스탯은 CardUseLimit 하나뿐이고, §7.2 도 초기 프로토타입에서는 스탯을 최소로
+	//	  두라고 권한다. 실제로 지능 1(= round(1 × 0.5) = 1)이 피해 1 을 통째로 상쇄해
+	//	  "성공했는데 피해 0" 이 되는 문제가 있었다 — 카드 수치가 곧 피해여야
+	//	  §10 확률·효과 표시와 §11 밸런스 지표가 성립한다.
+	//	  StrengthDamageMult / IntelligenceMitigation 프로퍼티는 선언만 남는다.
+	//
+	//	약점 포착(Status.NextAttack.DamageBonus)은 스탯이 아니라 카드 효과이므로 유지한다.
+	int32 Final = Amount;
+	int32 Bonus = 0;
 	if (ABaamPlayerState* SelfPS = GetBaamPlayerState(Avatar))
 	{
-		int32 Bonus = 0;
-		if (SelfPS->ConsumePendingStatus(Bang::Status::NextAttack::DamageBonus.GetTag(), Bonus))
-		{
-			Base += Bonus;
-		}
+		SelfPS->ConsumePendingStatus(Bang::Status::NextAttack::DamageBonus.GetTag(), Bonus);
+		Final += Bonus;
 	}
 
-	int32 Final = Base;
-	if (const UBaamAttributeSet* SourceAS = SourceASC->GetSet<UBaamAttributeSet>())
-	{
-		Final = FMath::RoundToInt(Base * (1.f + SourceAS->GetStrength() * StrengthDamageMult));
-	}
-	if (const UBaamAttributeSet* TargetAS = TargetASC->GetSet<UBaamAttributeSet>())
-	{
-		Final = FMath::Max(0, Final - FMath::RoundToInt(TargetAS->GetIntelligence() * IntelligenceMitigation));
-	}
+	UE_LOG(LogBaamCard, Log, TEXT("[피해] 카드%d%s → 최종 %d"),
+		Amount,
+		(Bonus > 0) ? *FString::Printf(TEXT(" + 약점포착%d"), Bonus) : TEXT(""),
+		Final);
 
 	if (Final <= 0)
 	{
-		return TEXT("피해 0(경감)");
+		return FString::Printf(TEXT("피해 0 (카드 수치 %d)"), Amount);
 	}
 
 	FGameplayEffectContextHandle Context = SourceASC->MakeEffectContext();
