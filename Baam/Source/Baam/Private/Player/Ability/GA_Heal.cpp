@@ -35,19 +35,33 @@ void UGA_Heal::ActivateAbility(
 	UAbilitySystemComponent* SourceASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
 
 	// ── 판정 결과 수신 (GDD §9.1) ──
-	//	서버가 카드 데이터로 판정을 끝냈다. 등급별 회복량이 EventMagnitude 로 온다.
-	//	Resolution.* 태그가 없으면 이 GA 의 HealAmount 로 폴백한다(구형 경로).
+	//	판정은 서버(HandlePlayCard)가 카드 DT 로 끝냈다. 비율은 DT_BaamCard 의 OutcomeWeights,
+	//	등급별 회복량은 OutcomeMagnitudes 다. 이 GA 는 결과 실행만 한다.
+	//	회복 확률·회복량에 붙는 스탯 보정은 두지 않는다 — GDD §7.1 확정 스탯은 CardUseLimit 뿐이고,
+	//	보정 합산 방식은 §14 미결정이다(§7.2 "회복 보정" 은 확장 후보일 뿐이다).
+	//
+	//	[비활성] HealAmount 폴백 (GDD §13.1 — 선언만 유지, 참조 제거).
+	//	  사유: 판정 없이 성공 취급하고 GA 값으로 회복하면, 카드 DT 를 고쳐도 회복량이 안 바뀌는
+	//	        경로가 남아 어느 값이 적용됐는지 알 수 없다. 판정 결과가 없다는 건 데이터/매핑 문제다.
+	//	  복구: FinalHeal 의 else 분기에 HealAmount 를 다시 넣는다.
 	static const FGameplayTag ResolutionRoot = FGameplayTag::RequestGameplayTag(TEXT("Resolution"));
 	const bool bHasServerOutcome =
 		TriggerEventData && TriggerEventData->InstigatorTags.HasTag(ResolutionRoot);
 
-	const EBaamDiceOutcome Outcome = bHasServerOutcome
-		? UBaamDiceComponent::TagsToOutcome(TriggerEventData->InstigatorTags, EBaamDiceOutcome::Failure)
-		: EBaamDiceOutcome::Success;
+	EBaamDiceOutcome Outcome = EBaamDiceOutcome::Failure;
+	int32 FinalHeal = 0;   // 판정 결과가 없으면 실패(회복 0) — §4.1 "실패는 추가 불이익 없음".
 
-	const int32 FinalHeal = bHasServerOutcome
-		? FMath::RoundToInt(TriggerEventData->EventMagnitude)
-		: HealAmount;
+	if (bHasServerOutcome)
+	{
+		Outcome   = UBaamDiceComponent::TagsToOutcome(TriggerEventData->InstigatorTags, EBaamDiceOutcome::Failure);
+		FinalHeal = FMath::RoundToInt(TriggerEventData->EventMagnitude);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Bang] GA_Heal: 서버 판정 결과(Resolution.*)가 없습니다 — "
+			     "DT_BaamCard 의 OutcomeWeights/OutcomeMagnitudes 와 AbilityByCardId 매핑을 확인하세요. 회복 없이 종료합니다."));
+	}
 
 	if (SourceASC && FinalHeal > 0)
 	{

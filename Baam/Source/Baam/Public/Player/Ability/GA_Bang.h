@@ -1,6 +1,7 @@
-// BANG! — 대상 1명에게 피해. 서버 주사위 판정(EBaamDiceOutcome)으로 피해 등급이 갈린다.
-//   행운 → 판정 굴림 가산(좋은 눈이 잘 뜸), 힘 → 피해 배율, 대상의 지능 → 받는 피해 경감.
-//   등급별 기본 피해: 대성공 2 / 성공 1 / 실패 1(경감) / 대실패 0.
+// BANG! — 대상 1명에게 피해. 판정은 서버가 카드 DT(DT_BaamCard)로 끝내고, 이 GA 는 결과만 실행한다.
+//   등급별 기본 피해는 카드 DT 의 OutcomeMagnitudes 에서 온다(GDD §4.3).
+//   여기서 붙는 보정은 피해 계산뿐이다: 힘 → 피해 배율, 대상의 지능 → 받는 피해 경감.
+//   판정 확률에 붙는 보정(행운 등)은 없다 — GDD §7.1 확정 스탯이 아니고 §14 미결정이다.
 //
 // 대상은 TriggerEventData->Target 으로 전달된다(응답 창/타깃팅은 §3에서 확장).
 // 대상이 없으면(단독 테스트) 계산된 피해를 로그로만 남기고 적용은 건너뛴다.
@@ -27,7 +28,8 @@ public:
 		const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	// 판정 등급별 기본 피해(스탯 보정 전). 낮은 눈=대실패 … 높은 눈=대성공.
+	// [비활성] 자체 판정 폴백용 등급 피해(스탯 보정 전). 실제 수치는 카드 DT 의 OutcomeMagnitudes 다.
+	//   선언만 유지하고 참조하지 않는다 (GDD §13.1). 되살리려면 TierBaseDamage 호출을 복구한다.
 	UPROPERTY(EditDefaultsOnly, Category = "Bang|Damage")
 	int32 CriticalSuccessDamage = 2;   // 크리티컬
 

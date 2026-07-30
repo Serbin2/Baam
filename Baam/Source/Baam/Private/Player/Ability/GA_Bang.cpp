@@ -15,6 +15,8 @@ UGA_Bang::UGA_Bang()
 	SetAssetTags(AssetTags);
 }
 
+// [비활성] 자체 판정 폴백용 등급 피해표 (GDD §13.1) — 호출처 없음.
+//   지금 등급별 수치는 카드 DT(OutcomeMagnitudes)에서 온다. 사유·복구는 ActivateAbility 주석 참고.
 int32 UGA_Bang::TierBaseDamage(EBaamDiceOutcome Outcome) const
 {
 	switch (Outcome)
@@ -43,39 +45,43 @@ void UGA_Bang::ActivateAbility(
 	const UBaamAttributeSet* SourceAS = SourceASC ? SourceASC->GetSet<UBaamAttributeSet>() : nullptr;
 	AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
 
-	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);
-	if (!SourceASC || !SourceAS || !Dice)
+	if (!SourceASC || !SourceAS)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Bang — 서버 컨텍스트 없음(ASC/AS/Dice). 중단."));
+		UE_LOG(LogTemp, Warning, TEXT("[Bang] GA_Bang — 서버 컨텍스트 없음(ASC/AS). 중단."));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
 	// ── 판정 결과 수신 (GDD §9.1) ──
-	//	판정은 서버(ABaamPlayerController::HandlePlayCard)가 카드 데이터로 이미 끝냈다.
-	//	여기서 다시 굴리지 않는다 — GA 는 "결과 실행" 만 한다.
-	//	Resolution.* 태그가 없으면(판정 없이 발동된 경우) 이 GA 의 기본값으로 폴백한다.
+	//	판정은 서버(ABaamPlayerController::HandlePlayCard)가 카드 DT 로 이미 끝냈다.
+	//	비율은 DT_BaamCard 의 OutcomeWeights, 등급별 수치는 OutcomeMagnitudes 다.
+	//	여기서 다시 굴리지 않는다 — GA 는 "결과 실행" 만 한다(§9.2 같은 판정 한 번만 적용).
+	//
+	//	굴림 보정(행운)은 두지 않는다. 행운은 GDD §7.1 의 확정 스탯이 아니고,
+	//	보정 합산 방식 자체가 §14 미결정이다. 카드 DT 의 비율이 곧 확률이어야
+	//	§10 확률 표시와 §11 "설정 확률 vs 실측" 비교가 성립한다.
 	static const FGameplayTag ResolutionRoot = FGameplayTag::RequestGameplayTag(TEXT("Resolution"));
 	const bool bHasServerOutcome =
 		TriggerEventData && TriggerEventData->InstigatorTags.HasTag(ResolutionRoot);
 
 	EBaamDiceOutcome Outcome = EBaamDiceOutcome::Failure;
-	int32 Roll = INDEX_NONE;
 	int32 TierBase = 0;
 
 	if (bHasServerOutcome)
 	{
 		Outcome  = UBaamDiceComponent::TagsToOutcome(TriggerEventData->InstigatorTags, EBaamDiceOutcome::Failure);
-		TierBase = FMath::RoundToInt(TriggerEventData->EventMagnitude);   // 카드 데이터의 등급별 수치
+		TierBase = FMath::RoundToInt(TriggerEventData->EventMagnitude);   // 카드 DT 의 등급별 수치
 	}
 	else
 	{
-		//	[폴백] 판정 없이 발동됨 — 이 GA 의 자체 비율/피해로 굴린다(구형 경로).
-		const int32 LuckBonus = FMath::RoundToInt(SourceAS->GetLuck());
-		Outcome  = Dice->RollForOutcome(Roll, /*Faces=*/0, /*RollBonus=*/LuckBonus);
-		TierBase = TierBaseDamage(Outcome);
+		//	[비활성] 자체 판정 폴백 (GDD §13.1 — 호출 경로 차단, 아래 등급 피해 표는 선언만 유지).
+		//	사유: GA 가 스스로 굴리면 카드 DT 와 다른 확률로 갈라져 어느 값이 적용됐는지 알 수 없다.
+		//	     판정 결과가 없다는 건 데이터/매핑 문제이므로 조용히 굴리지 말고 드러낸다.
+		//	복구: 폴백이 다시 필요하면 TierBaseDamage 호출과 Dice->RollForOutcome 을 되살린다.
+		//	현재 처리: 실패(수치 0)로 두고 경고만 남긴다 — §4.1 "실패는 추가 불이익 없음".
 		UE_LOG(LogTemp, Warning,
-			TEXT("[Bang] GA_Bang: 서버 판정 결과가 없어 자체 판정으로 폴백했습니다(카드 데이터 확인)."));
+			TEXT("[Bang] GA_Bang: 서버 판정 결과(Resolution.*)가 없습니다 — "
+			     "DT_BaamCard 의 OutcomeWeights/OutcomeMagnitudes 와 AbilityByCardId 매핑을 확인하세요. 피해 없이 종료합니다."));
 	}
 
 	// ── 피해 계산: 등급 기본 피해 × 힘 배율 − 대상 지능 경감 ──

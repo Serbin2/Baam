@@ -13,7 +13,6 @@
 #include "Game/BaamDiceComponent.h"           // 4단계 판정
 #include "Game/BaamGameplayTags.h"           // Bang::Status::*
 #include "Game/BaamGameState.h"               // PushToDiscard
-#include "Player/Component/BaamAttributeSet.h" // Luck
 #include "Game/BaamPlayerState.h"
 #include "Game/BaamSeatViewLibrary.h"
 #include "GameFramework/GameStateBase.h"      // PlayerArray
@@ -683,14 +682,11 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 
 		if (Dice && CardRow)
 		{
-			//	행운 + 비율 보정 어트리뷰트(장비·상태)를 모두 반영한다(GDD §4.2 / §7.2).
-			//	순서는 승산 → 가산 → 0 클램프 (UBaamDiceComponent::ApplyModifiers).
-			int32 Luck = 0;
-			if (const UBaamAttributeSet* AS = ASC->GetSet<UBaamAttributeSet>())
-			{
-				Luck = FMath::RoundToInt(AS->GetLuck());
-			}
-			const FBaamOutcomeWeights Weights = Dice->ApplyModifiers(CardRow->OutcomeWeights, ASC);
+			//	카드 DT(DT_BaamCard)의 4단계 비율을 그대로 Dice 에 넣어 판정한다(GDD §4.2).
+			//	행운 보정은 빼둔다: §7.1 의 확정 스탯은 CardUseLimit 뿐이고 보정 합산 방식은 §14 미결정이다.
+			//	DT 비율이 곧 확률이어야 §10 확률 표시와 §11 "설정 확률 vs 실측" 비교가 성립한다.
+			//	→ UBaamDiceComponent::ApplyLuck 은 선언만 남고 호출처가 없다(§13.1 비활성).
+			const FBaamOutcomeWeights Weights = CardRow->OutcomeWeights;
 
 			int32 Roll = INDEX_NONE;
 			EBaamDiceOutcome Outcome = Dice->RollOutcome(Weights, Roll);
@@ -759,10 +755,10 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 			UBaamDiceComponent::GetOutcomeChances(Weights, CF, F, S, CS);
 
 			BaamDebug::Screen(
-				FString::Printf(TEXT("[판정] %s → %s  (눈 %d / 확률 대실패%.0f%% 실패%.0f%% 성공%.0f%% 대성공%.0f%%, 행운%+d)  수치 %d"),
+				FString::Printf(TEXT("[판정] %s → %s  (눈 %d / 확률 대실패%.0f%% 실패%.0f%% 성공%.0f%% 대성공%.0f%%)  수치 %d"),
 					*CardId.ToString(),
 					*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(),
-					Roll, CF, F, S, CS, Luck, Magnitude),
+					Roll, CF, F, S, CS, Magnitude),
 				(Outcome == EBaamDiceOutcome::CriticalSuccess) ? FColor(255, 140, 0) :
 				(Outcome == EBaamDiceOutcome::Success)         ? FColor::Yellow :
 				(Outcome == EBaamDiceOutcome::Failure)         ? FColor(160, 160, 160) :
