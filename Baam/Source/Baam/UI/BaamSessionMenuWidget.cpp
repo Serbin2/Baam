@@ -205,8 +205,7 @@ void UBaamSessionMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 입력 모드는 이 위젯이 직접 챙긴다. Exec 에만 두면 다른 경로로 띄웠을 때
-	// (BP, spawn_widget_in_pie 등) 마우스가 게임 입력에 남아 버튼을 못 누른다.
+	// 어느 경로로 띄우든 버튼을 누를 수 있도록 입력 모드를 직접 잡는다.
 	if (APlayerController* PC = GetOwningPlayer())
 	{
 		FInputModeGameAndUI Mode;
@@ -264,15 +263,17 @@ void UBaamSessionMenuWidget::RefreshLobbyStatus()
 				Status.CurrentPlayers, *Need, Status.ReadyPlayers)));
 	}
 
-	// 판이 시작되면(Phase.Play) 로비 UI 는 물러난다. PhaseTag 는 전원에게 복제되므로
-	// 호스트·클라 모두 각자 닫힌다. 위젯이 자기 타이머 안에서 파괴되지 않도록 한 프레임 미룬다.
+	// 페이즈가 로비를 벗어나면 로비 UI 는 물러난다. 파괴는 한 프레임 뒤로 미룬다.
 	const ABaamGameState* GS = GetWorld() ? GetWorld()->GetGameState<ABaamGameState>() : nullptr;
-	if (!bClosedOnMatchStart && GS && GS->GetPhaseTag() == Bang::Phase::Play.GetTag())
+	const FGameplayTag Phase = GS ? GS->GetPhaseTag() : FGameplayTag();
+	const bool bMatchBegun = Phase.IsValid() && Phase != Bang::Phase::Lobby.GetTag();
+	if (!bClosedOnMatchStart && bMatchBegun)
 	{
 		bClosedOnMatchStart = true;
 		if (UWorld* World = GetWorld())
 		{
-			World->GetTimerManager().SetTimer(CloseOnStartTimer,
+			// SetTimer 는 rate 가 0 이면 등록하지 않고 해제한다 — 다음 틱은 전용 함수로 잡는다.
+			World->GetTimerManager().SetTimerForNextTick(
 				FTimerDelegate::CreateWeakLambda(this, [this]()
 				{
 					UGameInstance* GI = GetGameInstance();
@@ -282,7 +283,7 @@ void UBaamSessionMenuWidget::RefreshLobbyStatus()
 						UE_LOG(LogBaamNet, Log, TEXT("[SessionMenu] 판 시작 — 로비 UI 닫음"));
 						Menu->Close();
 					}
-				}), 0.f, /*bLoop=*/false);
+				}));
 		}
 	}
 
@@ -319,13 +320,7 @@ void UBaamSessionMenuWidget::NativeDestruct()
 		Session->GetSessionListReadyEvent().RemoveDynamic(this, &UBaamSessionMenuWidget::HandleSessionListReady);
 	}
 
-	// 열 때 바꿨으니 닫을 때 되돌린다.
-	if (APlayerController* PC = GetOwningPlayer())
-	{
-		PC->SetInputMode(FInputModeGameOnly());
-		PC->SetShowMouseCursor(false);
-	}
-
+	// 입력 모드는 되돌리지 않는다 — 카드 드래그·좌석 클릭에 마우스가 계속 필요하다.
 	Super::NativeDestruct();
 }
 

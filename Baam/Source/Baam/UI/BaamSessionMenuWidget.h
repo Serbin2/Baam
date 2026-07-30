@@ -128,9 +128,8 @@ private:
 	TObjectPtr<UButton> LeaveButton;
 
 	FTimerHandle LobbyRefreshTimer;
-	FTimerHandle CloseOnStartTimer;
 
-	// Phase.Play 를 본 뒤 한 번만 닫는다. 다시 F9 로 열면 그대로 둔다.
+	// 로비를 벗어난 페이즈를 본 뒤 한 번만 닫는다. 다시 F9 로 열면 그대로 둔다.
 	bool bClosedOnMatchStart = false;
 
 	// 목록 행 핸들러 — 목록을 다시 만들 때까지 살아 있어야 클릭이 동작한다.
