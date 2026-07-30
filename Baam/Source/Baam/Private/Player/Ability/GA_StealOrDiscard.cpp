@@ -1,6 +1,15 @@
 #include "Player/Ability/GA_StealOrDiscard.h"
-#include "Game/BaamGameplayTags.h"
+
 #include "AbilitySystemComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/Pawn.h"
+#include "Game/BaamCardLog.h"
+#include "Game/BaamCardType.h"
+#include "Game/BaamDebug.h"
+#include "Game/BaamDiceComponent.h"
+#include "Game/BaamGameState.h"
+#include "Game/BaamGameplayTags.h"
+#include "Game/BaamPlayerState.h"
 
 UGA_StealOrDiscard::UGA_StealOrDiscard()
 {
@@ -9,6 +18,15 @@ UGA_StealOrDiscard::UGA_StealOrDiscard()
 	SetAssetTags(AssetTags);
 
 	ActivationBlockedTags.AddTag(Bang::State::Dead.GetTag());
+}
+
+namespace
+{
+	ABaamPlayerState* PlayerStateFromActor(AActor* Actor)
+	{
+		const APawn* Pawn = Cast<APawn>(Actor);
+		return Pawn ? Pawn->GetPlayerState<ABaamPlayerState>() : nullptr;
+	}
 }
 
 void UGA_StealOrDiscard::ActivateAbility(
@@ -23,10 +41,113 @@ void UGA_StealOrDiscard::ActivateAbility(
 		return;
 	}
 
-	// TODO(§3): 대상 좌석에게 PickFromPlayer 응답 요청(손패 뒷면 index or 장비 선택).
-	//           선택된 카드를 bSteal 이면 시전자 손으로, 아니면 버린 패로 이동.
-	UE_LOG(LogTemp, Log, TEXT("[Bang] GA_StealOrDiscard — %s"),
-		bSteal ? TEXT("Panic!(훔치기)") : TEXT("CatBalou(버리기)"));
+	AActor* Avatar = ActorInfo ? ActorInfo->AvatarActor.Get() : nullptr;
+
+	// ── 판정 결과 수신 (GDD §9.1) ──
+	//	판정은 서버(HandlePlayCard)가 카드 데이터로 이미 끝냈다. 여기서는 실행만 한다.
+	//	EventMagnitude = 버릴(또는 훔칠) 장수. 실패/대실패면 0 이다.
+	static const FGameplayTag ResolutionRoot = FGameplayTag::RequestGameplayTag(TEXT("Resolution"));
+	const bool bHasServerOutcome =
+		TriggerEventData && TriggerEventData->InstigatorTags.HasTag(ResolutionRoot);
+
+	const EBaamDiceOutcome Outcome = bHasServerOutcome
+		? UBaamDiceComponent::TagsToOutcome(TriggerEventData->InstigatorTags, EBaamDiceOutcome::Failure)
+		: EBaamDiceOutcome::Success;
+
+	//	판정 없이 발동된 경우(폴백)에는 1 장으로 본다.
+	const int32 RequestedCount = bHasServerOutcome
+		? FMath::RoundToInt(TriggerEventData->EventMagnitude)
+		: 1;
+
+	if (RequestedCount <= 0)
+	{
+		//	실패/대실패 — 카드는 소비되지만 효과는 없다 (GDD §4.1).
+		BaamDebug::Screen(
+			FString::Printf(TEXT("위협  %s → [%s] 효과 없음"),
+				Avatar ? *Avatar->GetName() : TEXT("?"),
+				*UBaamDiceComponent::GetOutcomeText(Outcome).ToString()),
+			FColor(160, 160, 160), /*Time=*/5.f);
+
+		OnStealOrDiscardResolved(0, nullptr);
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
+	}
+
+	AActor* TargetActor = TriggerEventData ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
+	ABaamPlayerState* TargetPS = PlayerStateFromActor(TargetActor);
+	if (!TargetPS)
+	{
+		UE_LOG(LogBaamCard, Warning,
+			TEXT("[Bang] GA_StealOrDiscard: 대상 PlayerState 를 찾지 못했습니다 (대상 지정 확인)."));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	ABaamPlayerState* SourcePS = PlayerStateFromActor(Avatar);
+	const UWorld* World = Avatar ? Avatar->GetWorld() : nullptr;
+	ABaamGameState* GS  = World ? World->GetGameState<ABaamGameState>() : nullptr;
+	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);
+
+	if (!GS || !Dice)
+	{
+		UE_LOG(LogBaamCard, Warning, TEXT("[Bang] GA_StealOrDiscard: GameState / Dice 없음 — 중단."));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	// ── 무작위 선택 후 이동 ──
+	//	어느 카드를 버릴지는 서버가 정한다. 시드된 판정 스트림을 쓰므로 같은 판이 재현된다.
+	TArray<FString> MovedNames;
+	int32 Moved = 0;
+
+	for (int32 i = 0; i < RequestedCount; ++i)
+	{
+		//	손패는 매 반복마다 다시 읽는다 — 앞 반복에서 한 장이 빠졌다.
+		const TArray<FBaamCardInstance>& Hand = TargetPS->GetHand();
+		if (Hand.IsEmpty())
+		{
+			break;   // 더 버릴 카드가 없다
+		}
+
+		const int32 Index = Dice->RandomIndex(Hand.Num());
+		if (!Hand.IsValidIndex(Index))
+		{
+			break;
+		}
+
+		//	제거 전에 InstanceId 를 값으로 복사해 둔다 — 제거하면 위 참조가 흔들린다.
+		const int32 InstanceId = Hand[Index].InstanceId;
+
+		FBaamCardInstance Removed;
+		if (!TargetPS->RemoveCardFromHand(InstanceId, Removed))
+		{
+			break;
+		}
+
+		if (bSteal && SourcePS)
+		{
+			SourcePS->AddCardToHand(Removed);
+		}
+		else
+		{
+			GS->PushToDiscard(Removed);
+		}
+
+		MovedNames.Add(FString::Printf(TEXT("%s#%d"), *Removed.CardId.ToString(), Removed.InstanceId));
+		++Moved;
+	}
+
+	BaamDebug::Screen(
+		FString::Printf(TEXT("위협  %s → [%s] 좌석 %d 에서 %d 장 %s : %s"),
+			Avatar ? *Avatar->GetName() : TEXT("?"),
+			*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(),
+			TargetPS->GetSeatIndex(),
+			Moved,
+			bSteal ? TEXT("훔침") : TEXT("버림"),
+			MovedNames.IsEmpty() ? TEXT("(손패 없음)") : *FString::Join(MovedNames, TEXT(", "))),
+		(Moved > 0) ? FColor(255, 180, 80) : FColor(160, 160, 160), /*Time=*/6.f);
+
+	OnStealOrDiscardResolved(Moved, TargetActor);
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

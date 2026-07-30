@@ -118,6 +118,15 @@ public:
 	static void GetOutcomeChances(const FBaamOutcomeWeights& Weights,
 		float& OutCriticalFailure, float& OutFailure, float& OutSuccess, float& OutCriticalSuccess);
 
+	/**
+	 * 0 ~ Max-1 정수 (서버 전용). Max<=0 이면 INDEX_NONE.
+	 *
+	 * 판정 외의 무작위 결정(무작위 카드 선택 등)도 이 스트림을 쓴다 —
+	 * 셔플 스트림과 분리되어 있으므로 덱 순서를 밀지 않고, 같은 시드에서 재현된다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Bang|Dice")
+	int32 RandomIndex(int32 Max);
+
 	// ── 결과 ↔ 태그 변환 (Resolution.*) ──
 	//    판정 주체가 여기 하나이므로 변환도 여기 모은다.
 	UFUNCTION(BlueprintPure, Category = "Bang|Dice")

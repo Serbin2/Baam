@@ -198,6 +198,21 @@ EBaamDiceOutcome UBaamDiceComponent::RollOutcome(const FBaamOutcomeWeights& Weig
 	return EBaamDiceOutcome::CriticalFailure;
 }
 
+int32 UBaamDiceComponent::RandomIndex(int32 Max)
+{
+	if (Max <= 0)
+	{
+		return INDEX_NONE;
+	}
+
+	if (!bStreamInitialized)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Dice] RandomIndex: 스트림이 초기화되지 않았습니다."));
+	}
+
+	return RandomStream.RandRange(0, Max - 1);
+}
+
 FGameplayTag UBaamDiceComponent::OutcomeToTag(EBaamDiceOutcome Outcome)
 {
 	switch (Outcome)
