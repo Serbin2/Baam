@@ -15,4 +15,12 @@ class BAAM_API UBaamGameplayAbility : public UGameplayAbility
 
 public:
 	UBaamGameplayAbility();
+
+	/**
+	 * 액터(폰)에서 BAAM PlayerState 를 얻는다.
+	 *
+	 * 여러 GA 가 같이 쓰므로 베이스에 둔다. 각 .cpp 의 익명 네임스페이스에 같은 이름으로
+	 * 두면 유니티 빌드가 파일을 한 TU 로 합칠 때 중복 정의가 된다.
+	 */
+	static class ABaamPlayerState* GetBaamPlayerState(AActor* Actor);
 };

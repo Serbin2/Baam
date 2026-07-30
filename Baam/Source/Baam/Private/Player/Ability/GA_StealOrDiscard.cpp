@@ -20,15 +20,6 @@ UGA_StealOrDiscard::UGA_StealOrDiscard()
 	ActivationBlockedTags.AddTag(Bang::State::Dead.GetTag());
 }
 
-namespace
-{
-	ABaamPlayerState* PlayerStateFromActor(AActor* Actor)
-	{
-		const APawn* Pawn = Cast<APawn>(Actor);
-		return Pawn ? Pawn->GetPlayerState<ABaamPlayerState>() : nullptr;
-	}
-}
-
 void UGA_StealOrDiscard::ActivateAbility(
 	const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo,
@@ -74,7 +65,7 @@ void UGA_StealOrDiscard::ActivateAbility(
 	}
 
 	AActor* TargetActor = TriggerEventData ? const_cast<AActor*>(TriggerEventData->Target.Get()) : nullptr;
-	ABaamPlayerState* TargetPS = PlayerStateFromActor(TargetActor);
+	ABaamPlayerState* TargetPS = GetBaamPlayerState(TargetActor);
 	if (!TargetPS)
 	{
 		UE_LOG(LogBaamCard, Warning,
@@ -83,7 +74,7 @@ void UGA_StealOrDiscard::ActivateAbility(
 		return;
 	}
 
-	ABaamPlayerState* SourcePS = PlayerStateFromActor(Avatar);
+	ABaamPlayerState* SourcePS = GetBaamPlayerState(Avatar);
 	const UWorld* World = Avatar ? Avatar->GetWorld() : nullptr;
 	ABaamGameState* GS  = World ? World->GetGameState<ABaamGameState>() : nullptr;
 	UBaamDiceComponent* Dice = UBaamDiceComponent::Get(Avatar);

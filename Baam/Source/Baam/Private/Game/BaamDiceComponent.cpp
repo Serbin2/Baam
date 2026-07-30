@@ -169,13 +169,16 @@ FBaamOutcomeWeights UBaamDiceComponent::ApplyModifiers(const FBaamOutcomeWeights
 		/*MultS=*/1.f,
 		AS->GetWeightMultCriticalSuccess());
 
-	//	2) 가산 — 어트리뷰트 보정 + 행운.
-	const int32 Luck = FMath::RoundToInt(AS->GetLuck());
+	//	2) 가산 — 비율 보정 어트리뷰트만.
+	//	   ⚠️ 행운(Luck)은 여기에 넣지 않는다.
+	//	      DT 비율이 곧 표시 확률이어야 §10 "최종 확률 표시" 와 §11 "설정 확률 vs 실측" 비교가
+	//	      성립한다. 행운을 섞으면 카드 UI 의 확률이 플레이어마다 달라진다.
+	//	      행운을 다시 쓰려면 ApplyLuck 을 명시적으로 호출하거나 WeightBonus* 로 환산할 것.
 	Out.ApplyBonusAll(
 		FMath::RoundToInt(AS->GetWeightBonusCriticalFailure()),
 		FMath::RoundToInt(AS->GetWeightBonusFailure()),
-		FMath::RoundToInt(AS->GetWeightBonusSuccess()) + Luck * LuckSuccessWeightPerPoint,
-		FMath::RoundToInt(AS->GetWeightBonusCriticalSuccess()) + Luck * LuckCriticalWeightPerPoint);
+		FMath::RoundToInt(AS->GetWeightBonusSuccess()),
+		FMath::RoundToInt(AS->GetWeightBonusCriticalSuccess()));
 
 	return Out;
 }

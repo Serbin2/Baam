@@ -376,6 +376,26 @@ Modifier.CriticalRate
 | `BangLimit` / `MissedRequired` | `UBaamAttributeSet` | 선언 유지, 참조 제거 (뱅! 제한 없음 §3) |
 | `DrawWeightedCard` / `DealCards` | `ABaamGameMode` | 이미 비활성 (덱 기반 분배로 대체됨) |
 | 무기 5종의 사거리 정의 | `DT_BaamCard` 의 `Magnitude` | 재설계 전까지 `QuantityOfCard = 0` (§8) |
+| `FBaamCardRow::CheckChance` | `BaamGameDataTypes.h` | 필드 유지, 참조 제거 — `OutcomeWeights` 로 대체됨 (§4.2) |
+| 행운 판정 보정 (`ApplyLuck`) | `UBaamDiceComponent` | 선언·구현 유지, **호출처 없음** — 아래 참조 |
+| `LuckSuccessWeightPerPoint` / `LuckCriticalWeightPerPoint` | `UBaamDiceComponent` | 설정 유지, 읽는 곳 없음 (`ApplyLuck` 전용) |
+| `FBaamOutcomeWeights::ApplyBonus` (2인자) | `BaamGameDataTypes.h` | `ApplyLuck` 전용 — 4인자 `ApplyBonusAll` 이 정식 경로 |
+| `Luck` / `Agility` 어트리뷰트 | `UBaamAttributeSet` | 선언 유지 — 읽는 곳이 비활성 `GA_Missed` 하나뿐이라 연쇄 비활성 |
+
+#### 행운 보정을 비활성한 이유
+
+판정 비율에 행운을 섞으면 **DT 에 적은 비율이 곧 표시 확률이 아니게 된다.** 그러면
+§10 의 "카드 사용 전 최종 확률 표시" 와 §11 의 "설정 확률 vs 실제 체감 비교" 가 둘 다 흐려진다.
+초기 밸런스를 잡는 동안은 DT 비율 = 실제 확률을 유지하는 편이 검증에 유리하다.
+
+**되살리는 법**: 두 가지 중 하나를 택한다.
+- `UBaamDiceComponent::ApplyModifiers` 안에서 행운 항을 다시 더한다(원래 위치에 주석이 있다), 또는
+- 행운을 `WeightBonus*` 어트리뷰트로 환산해 캐릭터 GE 로 부여한다 — 이쪽이 §10 확률 표시와 일관된다.
+
+> ⚠️ **`ApplyModifiers` 호출은 비활성 대상이 아니다.** 이 호출을 빼면 행운뿐 아니라
+> 장비의 비율 보정(드워프 장갑·마녀의 부적)까지 함께 죽는다 — GE 가 어트리뷰트를 바꿔도
+> 판정이 읽지 않기 때문이다. §8 의 장비 재설계와 §10 의 "장비 효과가 적용된 최종 확률 표시"가
+> 이 경로에 의존한다. 실제로 한 번 끊겨서 장비 2종이 무효화된 적이 있다.
 
 ## 14. 미결정 항목
 
@@ -385,8 +405,8 @@ Modifier.CriticalRate
 - 플레이 인원과 세션 목표 시간
 - 카드별 기본 성공률·대성공률
 - 실패·대성공의 카드별 효과
-- 확률 최소·최대 제한과 보정 합산 방식
-- 장비 설치가 카드 사용 한도를 소비하는지 여부
+- 확률 최소·최대 제한 (보정 합산 방식은 확정 — §7.2 / §13.2: `기본 비율 × 승산 + 가산 → 0 클램프 → 정규화`)
+- ~~장비 설치가 카드 사용 한도를 소비하는지 여부~~ → **소비한다** 로 확정 (구현: `HandlePlayCard` 장착 경로)
 - 자동 방어 판정과 공격 판정의 처리 순서
 - 역할·캐릭터·성장 시스템의 관계
 - 기존 기본판 카드의 유지·제거·재설계 전체 목록
@@ -399,5 +419,6 @@ Modifier.CriticalRate
 | 버전 | 날짜 | 변경 내용 |
 |---|---|---|
 | v0.1 | 2026-07-29 | 기본판 기반 원칙, 갈색 카드 확률 판정, 응답 카드 제거, 수트·사거리 제거, 뱅! 제한 제거, 턴당 카드 2장, 자동 장비 판정, 무기 재설계 방향 정리 |
+| v0.3 | 2026-07-30 | 구현에서 확정된 사항 반영 — 보정 합산 방식(승산→가산→클램프→정규화), 장비 설치는 카드 사용 한도 소비. 행운 판정 보정과 연쇄 항목(`ApplyLuck` / Luck·Agility 어트리뷰트 등)을 §13.2 비활성으로 기록 |
 | v0.2 | 2026-07-30 | 판정을 3단계 → **4단계**(대실패 추가)로 변경. 카드 데이터를 4단계 상대 비율 + 정규화 구조로 정의. "제거" 를 **비활성 처리(경로 차단)** 정책으로 전환하고 §13.1 신설 |
 

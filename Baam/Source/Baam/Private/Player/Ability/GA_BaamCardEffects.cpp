@@ -24,12 +24,6 @@ UGA_BaamCardEffects::UGA_BaamCardEffects()
 
 namespace
 {
-	ABaamPlayerState* PlayerStateFromActor(AActor* Actor)
-	{
-		const APawn* Pawn = Cast<APawn>(Actor);
-		return Pawn ? Pawn->GetPlayerState<ABaamPlayerState>() : nullptr;
-	}
-
 	/** 페이로드에 실린 Card.Id.* 태그를 찾는다. 어느 카드가 이 GA 를 발동했는지 알아내는 용도. */
 	FGameplayTag FindCardIdTag(const FGameplayTagContainer& Tags)
 	{
@@ -121,8 +115,8 @@ void UGA_BaamCardEffects::ExecuteEffects(
 	const UWorld* World = Avatar ? Avatar->GetWorld() : nullptr;
 	ABaamGameState* GS = World ? World->GetGameState<ABaamGameState>() : nullptr;
 
-	ABaamPlayerState* SelfPS   = PlayerStateFromActor(Avatar);
-	ABaamPlayerState* TargetPS = PlayerStateFromActor(TargetActor);
+	ABaamPlayerState* SelfPS   = GetBaamPlayerState(Avatar);
+	ABaamPlayerState* TargetPS = GetBaamPlayerState(TargetActor);
 
 	//	목록 순서대로 실행한다. 순서가 결과를 바꿀 수 있으므로(뽑기 → 한도 회복 등)
 	//	DT 에 적힌 순서를 그대로 지킨다.
@@ -190,7 +184,7 @@ FString UGA_BaamCardEffects::ApplyDamage(int32 Amount, AActor* Avatar, AActor* T
 	//	약점 포착(Status.NextAttack.DamageBonus)을 소모해 기본 피해에 더한다.
 	//	힘 배율보다 먼저 더한다 — "약점을 노려 더 깊이 박힌다" 가 배율의 영향을 받는 쪽이 자연스럽다.
 	int32 Base = Amount;
-	if (ABaamPlayerState* SelfPS = PlayerStateFromActor(Avatar))
+	if (ABaamPlayerState* SelfPS = GetBaamPlayerState(Avatar))
 	{
 		int32 Bonus = 0;
 		if (SelfPS->ConsumePendingStatus(Bang::Status::NextAttack::DamageBonus.GetTag(), Bonus))

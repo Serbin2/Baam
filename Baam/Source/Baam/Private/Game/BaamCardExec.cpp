@@ -28,11 +28,21 @@
 #include "Game/BaamGameplayTags.h"
 #include "Player/Effect/GE_Damage.h"
 
+// 덱 총 장수 검증 기준. 0 = 검사하지 않음. 목표 구성이 정해지면 켜서 쓴다.
+static int32 GBangExpectedDeckSize = 0;
+static FAutoConsoleVariableRef CVarBangExpectedDeckSize(
+	TEXT("Bang.ExpectedDeckSize"),
+	GBangExpectedDeckSize,
+	TEXT("Baam_DumpDeck 이 검사할 덱 총 장수. 0 이면 검사하지 않는다."),
+	ECVF_Default);
+
 void ABaamGameMode::Baam_DumpDeck()
 {
 #if !UE_BUILD_SHIPPING
-	// 기본판 덱은 정확히 80장 — QuantityOfCard 합계의 자체 검증 기준.
-	static constexpr int32 ExpectedDeckSize = 80;
+	// 기대 총 장수. 0 이면 검사하지 않는다.
+	//   기본판 전사 시절에는 80 이 고정 검증값이었지만, BAAM 은 카드 구성이 다르므로(GDD §6)
+	//   목표 장수를 정했을 때만 켜서 쓴다. `Bang.ExpectedDeckSize 64` 처럼 설정.
+	const int32 ExpectedDeckSize = GBangExpectedDeckSize;
 
 	const UGameInstance* GI = GetGameInstance();
 	const UBaamDataSubsystem* Data = GI ? GI->GetSubsystem<UBaamDataSubsystem>() : nullptr;
@@ -105,9 +115,17 @@ void ABaamGameMode::Baam_DumpDeck()
 			                    TEXT(""));
 	}
 
-	UE_LOG(LogBaamCard, Log, TEXT("총 %d 종류 / %d 장   (기대 %d : %s)"),
-		Counts.Num(), Deck.Num(), ExpectedDeckSize,
-		(Deck.Num() == ExpectedDeckSize) ? TEXT("일치") : TEXT("불일치 ← QuantityOfCard 확인"));
+	if (ExpectedDeckSize > 0)
+	{
+		UE_LOG(LogBaamCard, Log, TEXT("총 %d 종류 / %d 장   (기대 %d : %s)"),
+			Counts.Num(), Deck.Num(), ExpectedDeckSize,
+			(Deck.Num() == ExpectedDeckSize) ? TEXT("일치") : TEXT("불일치 ← QuantityOfCard 확인"));
+	}
+	else
+	{
+		UE_LOG(LogBaamCard, Log, TEXT("총 %d 종류 / %d 장   (기대 장수 미설정 — Bang.ExpectedDeckSize 로 켤 수 있음)"),
+			Counts.Num(), Deck.Num());
+	}
 
 	if (NumUnimplemented > 0)
 	{

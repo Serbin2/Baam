@@ -682,11 +682,16 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 
 		if (Dice && CardRow)
 		{
-			//	카드 DT(DT_BaamCard)의 4단계 비율을 그대로 Dice 에 넣어 판정한다(GDD §4.2).
-			//	행운 보정은 빼둔다: §7.1 의 확정 스탯은 CardUseLimit 뿐이고 보정 합산 방식은 §14 미결정이다.
-			//	DT 비율이 곧 확률이어야 §10 확률 표시와 §11 "설정 확률 vs 실측" 비교가 성립한다.
+			//	카드 DT 의 4단계 비율에 "장비·상태의 비율 보정" 만 반영해 판정한다(GDD §4.2 / §8).
+			//
+			//	행운(Luck)은 반영하지 않는다 — DT 비율이 곧 표시 확률이어야 §10 확률 표시와
+			//	§11 "설정 확률 vs 실측" 비교가 성립한다. (ApplyModifiers 안에서 제외됨)
 			//	→ UBaamDiceComponent::ApplyLuck 은 선언만 남고 호출처가 없다(§13.1 비활성).
-			const FBaamOutcomeWeights Weights = CardRow->OutcomeWeights;
+			//
+			//	⚠️ 장비 보정은 반드시 통과시켜야 한다. 이 호출을 빼면 드워프 장갑·마녀의 부적이
+			//	   GE 로 어트리뷰트를 바꿔도 판정이 읽지 않아 효과가 사라진다.
+			//	   GDD §10 도 "장비 효과가 적용된 최종 확률" 을 표시하라고 요구한다.
+			const FBaamOutcomeWeights Weights = Dice->ApplyModifiers(CardRow->OutcomeWeights, ASC);
 
 			int32 Roll = INDEX_NONE;
 			EBaamDiceOutcome Outcome = Dice->RollOutcome(Weights, Roll);
