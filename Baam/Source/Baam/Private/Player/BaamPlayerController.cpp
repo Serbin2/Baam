@@ -23,11 +23,9 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 
-ABaamPlayerController::ABaamPlayerController()
-{
-	// GA 는 AbilityByCardId(BP 디폴트에서 채움)로 조회한다. 하드코딩 폴백은 없앴다
-	// (엉뚱한 GA 로 조용히 새는 버그 방지).
-}
+//	생성자는 없다 — GA 는 AbilityByCardId(BP 디폴트에서 채움)로만 조회한다.
+//	하드코딩 폴백을 두지 않는 이유: 매핑이 비었을 때 엉뚱한 GA 로 조용히 새는 것보다
+//	"GA 매핑 없음!" 을 화면에 띄우고 멈추는 편이 낫다(HandlePlayCard 참고).
 
 // ======================================================================================
 //  손패 UI 배선
@@ -748,10 +746,15 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 				}
 			}
 
-			const int32 Magnitude = CardRow->OutcomeMagnitudes.ForOutcome(Outcome);
-
 			Payload.InstigatorTags.AddTag(UBaamDiceComponent::OutcomeToTag(Outcome));
-			Payload.EventMagnitude = static_cast<float>(Magnitude);
+
+			//	[비활성] EventMagnitude 는 전용 GA(GA_Bang/GA_Heal/GA_StealOrDiscard)의 폴백 경로다.
+			//	  그 GA 들이 전부 비활성이라(GDD §13.1) 지금은 아무도 읽지 않는다.
+			//	  실어 보내는 것 자체는 무해하고, 전용 GA 를 되살릴 때 이 줄이 있어야 하므로 남긴다.
+			//	  ⚠️ 다만 로그에는 찍지 않는다 — OutcomeMagnitudes 는 비활성 필드라 실제 효과와
+			//	     어긋난다(뱅 성공이 "수치 0" 으로, 함정이 "수치 1" 로 보였다).
+			//	     실제 효과는 바로 다음 줄에서 GA 가 요약을 출력한다.
+			Payload.EventMagnitude = static_cast<float>(CardRow->OutcomeMagnitudes.ForOutcome(Outcome));
 
 			ResolvedOutcome = Outcome;
 			bResolved = true;
@@ -760,10 +763,10 @@ void ABaamPlayerController::HandlePlayCard(int32 InstanceId, int32 TargetSeat)
 			UBaamDiceComponent::GetOutcomeChances(Weights, CF, F, S, CS);
 
 			BaamDebug::Screen(
-				FString::Printf(TEXT("[판정] %s → %s  (눈 %d / 확률 대실패%.0f%% 실패%.0f%% 성공%.0f%% 대성공%.0f%%)  수치 %d"),
+				FString::Printf(TEXT("[판정] %s → %s  (눈 %d / 확률 대실패%.0f%% 실패%.0f%% 성공%.0f%% 대성공%.0f%%)"),
 					*CardId.ToString(),
 					*UBaamDiceComponent::GetOutcomeText(Outcome).ToString(),
-					Roll, CF, F, S, CS, Magnitude),
+					Roll, CF, F, S, CS),
 				(Outcome == EBaamDiceOutcome::CriticalSuccess) ? FColor(255, 140, 0) :
 				(Outcome == EBaamDiceOutcome::Success)         ? FColor::Yellow :
 				(Outcome == EBaamDiceOutcome::Failure)         ? FColor(160, 160, 160) :
