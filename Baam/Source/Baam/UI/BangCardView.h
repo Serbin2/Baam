@@ -8,8 +8,8 @@
 /**
  * UI 전용 카드 뷰모델.
  *
- * 게임 로직 쪽 카드 타입(FBangCard / UBangCardDef)에 의존하지 않는다.
- * 로직 파트가 완성되면 그쪽에서 이 구조체로 변환해 UI로 밀어넣기만 하면 된다.
+ * 게임 로직 쪽 카드 타입(FBaamCardInstance / FBaamCardRow)에 의존하지 않는다.
+ * 변환은 UBaamCardViewLibrary::MakeCardView 한 곳에서만 일어난다 — 그 함수가 로직/UI 경계다.
  */
 USTRUCT(BlueprintType)
 struct FBangCardView

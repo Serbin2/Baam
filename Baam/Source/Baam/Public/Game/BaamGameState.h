@@ -36,8 +36,11 @@ public:
 	void PushToDiscard(const FBaamCardInstance& Card);
 
 	/**
-	 * 뽑기(Draw!) 판정. 수트를 쓰지 않으므로 확률 굴림으로 대체한다.
-	 * 반드시 GameState 의 시드된 스트림을 쓸 것
+	 * [미구현] 뽑기(Draw!) 판정. 수트를 쓰지 않으므로 확률 굴림으로 대체할 자리다.
+	 *
+	 * ⚠️ 지금은 인자를 무시하고 항상 false 를 돌려준다 — 호출하면 조용히 전부 실패한다.
+	 *    감옥·다이너마이트를 넣을 때 구현한다. 반드시 Dice 의 시드된 스트림을 쓸 것
+	 *    (셔플 스트림을 쓰면 판정이 덱 순서를 밀어 재현이 깨진다).
 	 */
 	bool PerformDrawCheck(int32 Seat, float SuccessChance);
 	
@@ -48,7 +51,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Baam|Phase")
 	FGameplayTag GetPhaseTag() const { return PhaseTag; }
 
-	//	서버 전용. 페이즈를 바꾼다.
+	//	서버 전용. 페이즈를 바꾼다 — 페이즈 전환의 유일한 입구다.
+	//	같은 값이면 아무것도 하지 않는다(로그도 남기지 않는다).
 	void SetPhaseTag(FGameplayTag InPhase);
 
 	//	전원에게 복제되는 공개 카운트. 클라 UI/검증은 이 값을 본다.
@@ -153,7 +157,6 @@ protected:
 	void EnterDrawPhase();
 	void EnterPlayPhase();
 	void AdvanceToNextSeat();
-	void SetPhase(const FGameplayTag& NewPhase);
 
 	//	서버 시작 시 덱을 준비한다.
 	virtual void BeginPlay() override;

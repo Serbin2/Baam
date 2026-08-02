@@ -1,3 +1,8 @@
+// ⚠️ [비활성] AbilityByCardId 에 매핑하지 말 것 (GDD §13.1).
+//   잡화점은 카드를 공개해 두고 시계방향으로 고르는 선택 UI 가 필요한데 아직 없다.
+//   본문이 TODO 스텁이라 매핑하면 카드만 소비되고 아무 일도 일어나지 않는다.
+//   정식 경로는 UGA_BaamCardEffects + DT_BaamCard 의 OutcomeEffects 하나뿐이다.
+
 #include "Player/Ability/GA_GeneralStore.h"
 #include "Game/BaamGameplayTags.h"
 #include "AbilitySystemComponent.h"

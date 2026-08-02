@@ -22,8 +22,6 @@ class BAAM_API ABaamPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	ABaamPlayerController();
-
 	// 클라(소유): HUD 의 OnCardPlayRequested 에 바인딩한다. 서버로 중계만 한다.
 	//   InstanceId : 사용할 카드 인스턴스 (FBangCardView.InstanceId). 손패의 특정 1장을 가리킨다.
 	//   TargetSeat : 대상 좌석. 대상이 필요 없으면 INDEX_NONE.

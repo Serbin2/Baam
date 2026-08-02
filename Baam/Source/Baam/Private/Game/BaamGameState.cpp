@@ -10,7 +10,6 @@
 #include "Game/BaamDataSubsystem.h"
 #include "Game/BaamDiceComponent.h"
 #include "Game/BaamGameplayTags.h"
-#include "Game/BaamGameplayTags.h"
 #include "Game/BaamPlayerState.h"
 #include "Player/BaamCharacter.h"
 #include "Player/Component/BaamAttributeSet.h"
@@ -55,13 +54,15 @@ void ABaamGameState::BeginPlay()
 
 void ABaamGameState::SetPhaseTag(FGameplayTag InPhase)
 {
+	//	페이즈 전환은 반드시 이 함수 하나를 거친다.
+	//	예전에는 권한 검사가 없는 SetPhase 가 따로 있어 턴 진행 전체가 검사를 우회했다.
 	if (!HasAuthority() || PhaseTag == InPhase)
 	{
 		return;
 	}
 
 	PhaseTag = InPhase;
-	UE_LOG(LogBaamCard, Log, TEXT("[GameState] 페이즈 → %s"), *InPhase.ToString());
+	UE_LOG(LogBaamCard, Log, TEXT("[Turn] 좌석 %d — %s"), CurrentSeat, *InPhase.ToString());
 }
 
 void ABaamGameState::InitializeDeck(int32 Seed)
@@ -306,12 +307,6 @@ bool ABaamGameState::HasCardUsesLeft(int32 Seat) const
 //  턴 진행
 // ══════════════════════════════════════════════════════════════════════════════════════
 
-void ABaamGameState::SetPhase(const FGameplayTag& NewPhase)
-{
-	PhaseTag = NewPhase;
-	UE_LOG(LogBaamCard, Log, TEXT("[Turn] 좌석 %d — %s"), CurrentSeat, *NewPhase.ToString());
-}
-
 void ABaamGameState::StartMatch()
 {
 	if (!HasAuthority() || bMatchRunning)
@@ -362,7 +357,7 @@ void ABaamGameState::BeginTurn(int32 Seat)
 	}
 
 	CurrentSeat = Seat;
-	SetPhase(Bang::Phase::TurnStart.GetTag());
+	SetPhaseTag(Bang::Phase::TurnStart.GetTag());
 
 	//	턴당 카드 사용 횟수를 새로 연다(GDD §5.2).
 	if (ABaamPlayerState* PS = GetPlayerStateBySeat(Seat))
@@ -378,7 +373,7 @@ void ABaamGameState::BeginTurn(int32 Seat)
 
 void ABaamGameState::EnterDrawPhase()
 {
-	SetPhase(Bang::Phase::Draw.GetTag());
+	SetPhaseTag(Bang::Phase::Draw.GetTag());
 
 	ABaamPlayerState* PS = GetPlayerStateBySeat(CurrentSeat);
 	if (!PS)
@@ -420,7 +415,7 @@ void ABaamGameState::EnterDrawPhase()
 
 void ABaamGameState::EnterPlayPhase()
 {
-	SetPhase(Bang::Phase::Play.GetTag());
+	SetPhaseTag(Bang::Phase::Play.GetTag());
 }
 
 bool ABaamGameState::CanSeatPlayCards(int32 Seat) const
@@ -462,7 +457,7 @@ void ABaamGameState::RequestEndTurn(int32 RequestingSeat)
 	if (HandNum > Limit)
 	{
 		//	한도를 넘었다 — 버릴 때까지 턴을 넘기지 않는다.
-		SetPhase(Bang::Phase::Discard.GetTag());
+		SetPhaseTag(Bang::Phase::Discard.GetTag());
 		UE_LOG(LogBaamCard, Log, TEXT("[Turn] 좌석 %d 손패 초과 (%d > 한도 %d) — 버리기 대기"),
 			CurrentSeat, HandNum, Limit);
 		return;
@@ -615,7 +610,7 @@ bool ABaamGameState::CheckWinCondition()
 	WinningRoleTag = Winner;
 	CurrentSeat    = INDEX_NONE;
 	bMatchRunning  = false;
-	SetPhase(Bang::Phase::GameOver.GetTag());
+	SetPhaseTag(Bang::Phase::GameOver.GetTag());
 
 	//	판이 끝나면 전원의 역할을 공개한다(누가 배신자였는지 보는 것이 마무리의 재미다).
 	for (APlayerState* Base : PlayerArray)
@@ -638,7 +633,7 @@ void ABaamGameState::AdvanceToNextSeat()
 	{
 		//	전멸 — 승패 판정이 붙기 전까지는 여기서 멈춘다.
 		UE_LOG(LogBaamCard, Warning, TEXT("[Turn] 살아있는 좌석이 없습니다 — 진행 중단."));
-		SetPhase(Bang::Phase::GameOver.GetTag());
+		SetPhaseTag(Bang::Phase::GameOver.GetTag());
 		bMatchRunning = false;
 		return;
 	}
@@ -667,8 +662,7 @@ void ABaamGameState::AdvanceToNextSeat()
 
 void ABaamGameState::GetDeck(TArray<FBaamCardInstance>& OutDeck) const
 {
-	OutDeck.Empty();
-	OutDeck = Deck;
+	OutDeck = Deck;   //	대입이 기존 내용을 버린다 — 앞에 Empty() 를 부를 필요가 없다.
 }
 
 void ABaamGameState::ShuffleDeck()

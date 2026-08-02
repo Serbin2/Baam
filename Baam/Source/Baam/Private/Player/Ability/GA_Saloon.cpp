@@ -1,3 +1,8 @@
+// ⚠️ [비활성] AbilityByCardId 에 매핑하지 말 것 (GDD §13.1).
+//   회복은 UGA_BaamCardEffects 의 HealSelf 가 담당한다(맥주가 쓴다).
+//   전원 회복이 필요해지면 HealSelf 옆에 HealAll Op 를 추가하는 편이 낫다.
+//   본문이 TODO 스텁이라 매핑하면 카드만 소비되고 아무도 회복하지 않는다.
+
 #include "Player/Ability/GA_Saloon.h"
 #include "Game/BaamGameplayTags.h"
 #include "AbilitySystemComponent.h"

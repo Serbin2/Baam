@@ -130,8 +130,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -177,8 +177,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -252,8 +252,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -321,8 +321,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -375,8 +375,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -425,8 +425,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -475,8 +475,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -518,8 +518,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -554,8 +554,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []
@@ -590,8 +590,8 @@
     "OutcomeMagnitudes": {
       "CriticalFailure": 0,
       "Failure": 0,
-      "Success": 1,
-      "CriticalSuccess": 2
+      "Success": 0,
+      "CriticalSuccess": 0
     },
     "ModifierTags": {
       "GameplayTags": []

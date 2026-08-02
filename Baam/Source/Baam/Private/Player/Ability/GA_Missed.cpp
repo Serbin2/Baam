@@ -1,3 +1,9 @@
+// ⚠️ [비활성] AbilityByCardId 에 매핑하지 말 것 (GDD §13.1).
+//   BAAM 에는 "빗나감" 카드가 없다 — 방어는 요정 갑옷의 자동 방어 판정(GDD §14 미결)이 맡을 예정이다.
+//   본문의 응답 제출도 TODO 스텁이라 판정 결과가 어디에도 전달되지 않는다.
+//   또한 구형 주사위 경로(UBaamDiceComponent::RollForOutcome)의 유일한 호출처다 —
+//   이 GA 를 정리하면 구형 경로 전체를 함께 걷어낼 수 있다.
+
 #include "Player/Ability/GA_Missed.h"
 #include "Player/Component/BaamAttributeSet.h"
 #include "Game/BaamGameplayTags.h"
@@ -49,7 +55,7 @@ void UGA_Missed::ActivateAbility(
 	const bool bDodged =
 		(Outcome == EBaamDiceOutcome::Success || Outcome == EBaamDiceOutcome::CriticalSuccess);
 
-	// TODO(§3): bDodged 를 진행 중인 응답 요청(FBangResolutionRequest)에 제출 →
+	// TODO(§3): bDodged 를 진행 중인 응답 요청에 제출 → (응답 창 타입은 아직 만들지 않았다)
 	//           성공이면 해당 BANG! 을 무효화한다. (MissedRequired 만큼 필요할 수 있음)
 	BaamDebug::Screen(
 		FString::Printf(TEXT("회피  %s → %s  (판정 %s, 눈%d, 행운+민첩%+d)"),

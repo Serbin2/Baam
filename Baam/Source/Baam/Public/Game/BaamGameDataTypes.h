@@ -85,8 +85,13 @@ struct FBaamOutcomeWeights
  * "어느 쪽을 채워야 하는지" 가 카드마다 달라지고, 잘못 채워도 조용히 효과 0 이 된다
  * (실제로 뱅의 피해가 안 들어가는 문제로 한 번 겪었다).
  *
- * 남겨 두는 이유: 전용 GA 폴백 경로(EventMagnitude)가 아직 이 값을 읽는다.
+ * ⚠️ 현재 이 값을 읽는 코드는 하나도 없다. HandlePlayCard 가 EventMagnitude 에 실어 보내지만
+ *    받는 쪽(GA_Bang / GA_Heal / GA_StealOrDiscard)이 전부 비활성이라 소비되지 않는다.
+ *    전용 GA 를 되살릴 때를 위해 경로만 남겨 둔 상태다.
+ *
  * 새 카드는 반드시 OutcomeEffects 를 쓸 것 (GDD §13.1 비활성 처리).
+ * DT 에서는 전부 0 으로 비워 둔다 — 값이 남아 있으면 Baam_DumpDeck 의 "효과 데이터 없음"
+ * 검사를 무력화시킨다(실제로 한 번 그렇게 놓쳤다).
  */
 USTRUCT(BlueprintType)
 struct FBaamOutcomeMagnitudes
@@ -299,8 +304,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
 	TSubclassOf<UGameplayEffect> EquipEffect;
 
-	// GA/GE 가 읽는 수치. 역마차 2 / 웰스파고 3 / 무기 사거리 / 피해량 등.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	//	[미사용] GA/GE 가 읽는 범용 수치로 만들었지만 참조하는 코드가 없다.
+	//	  등급별 수치는 OutcomeEffects 의 Amount 가 담당한다. 채워도 아무 일도 일어나지 않는다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 Magnitude = 0;
 	
 	//	덱에 들어갈 카드 매수
@@ -323,8 +329,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome|Deprecated")
 	FBaamOutcomeMagnitudes OutcomeMagnitudes;
 
-	//	이 카드가 받을 수 있는 보정의 종류 (GDD §4.3 "보정 허용 태그").
-	//	비어 있으면 모든 보정을 받는다.
+	//	[미구현] 이 카드가 받을 수 있는 보정의 종류 (GDD §4.3 "보정 허용 태그").
+	//	  ⚠️ 아직 아무도 읽지 않는다 — 채워도 보정이 걸러지지 않고 전부 적용된다.
+	//	     거르려면 UBaamDiceComponent::ApplyModifiers 에서 이 컨테이너를 보게 해야 한다.
+	//	  비어 있으면 모든 보정을 받는다(구현 후에도 이 규칙 유지 예정).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Outcome")
 	FGameplayTagContainer ModifierTags;
 

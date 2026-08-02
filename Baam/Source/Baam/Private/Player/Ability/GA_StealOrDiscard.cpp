@@ -1,3 +1,8 @@
+// ⚠️ [비활성] AbilityByCardId 에 매핑하지 말 것 (GDD §13.1).
+//   위협(Card.Id.CatBalou)은 UGA_BaamCardEffects 의 DiscardTargetRandom/StealTargetRandom 로 간다.
+//   이 GA 는 비활성 폴백인 EventMagnitude 를 읽으므로, 매핑하면 장수가 0 이 되어 아무 일도 없다.
+//   정식 경로는 UGA_BaamCardEffects + DT_BaamCard 의 OutcomeEffects 하나뿐이다.
+
 #include "Player/Ability/GA_StealOrDiscard.h"
 
 #include "AbilitySystemComponent.h"

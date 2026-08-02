@@ -1,3 +1,8 @@
+// ⚠️ [비활성] AbilityByCardId 에 매핑하지 말 것 (GDD §13.1).
+//   개틀링/인디언은 "전원에게 순차 응답 요청" 이 필요한데 응답 창 시스템이 아직 없다.
+//   본문이 TODO 스텁이라 매핑하면 카드만 소비되고 아무 일도 일어나지 않는다.
+//   정식 경로는 UGA_BaamCardEffects + DT_BaamCard 의 OutcomeEffects 하나뿐이다.
+
 #include "Player/Ability/GA_AreaBang.h"
 #include "Game/BaamGameplayTags.h"
 #include "AbilitySystemComponent.h"
