@@ -212,15 +212,17 @@ struct FBaamOutcomeEffects
 };
 
 /**
- * 캐릭터(또는 역할) 1종의 GAS 구성을 서술하는 DT Row.
- *   - Row 이름 = CharacterTag 의 태그 문자열 (예: "Character.Ability.PaulRegret").
+ * 직업(또는 역할) 1종의 GAS 구성을 서술하는 DT Row.
+ *   - Row 이름 = CharacterTag 의 태그 문자열 (예: "Character.Job.Mage").
  *     DataSubsystem 이 태그로 이 Row 를 찾아 캐릭터에 부여한다.
  *
- * BANG! 매핑
- *   DefaultAttributeGE  : Health/WeaponRange/BangLimit 등 기본 스탯을 세팅하는 GE(Instant).
- *   PassiveEffects      : 캐릭터 특능 패시브 GE(Infinite). 예) Paul Regret → DistanceIncrease +1.
- *   GrantedAbilities    : 이 캐릭터가 쓸 수 있는 능동 어빌리티(GA). BANG! 에서는 대부분
- *                         카드가 GA 를 구동하지만, 캐릭터 고유 능동기(Sid Ketchum 등)는 여기서 부여.
+ * 매핑
+ *   DefaultAttributeGE  : Health / CardUseLimit 등 기본 스탯을 세팅하는 GE(Instant).
+ *   PassiveEffects      : 직업 정체성 패시브 GE(Infinite).
+ *                         예) 마법사 → WeightBonusCriticalSuccess +, WeightBonusCriticalFailure +
+ *                             도적   → CardUseLimit +1
+ *   GrantedAbilities    : 이 직업이 쓸 수 있는 능동 어빌리티(GA). 대부분은 카드가 GA 를
+ *                         구동하므로, 직업 고유 능동기가 있을 때만 채운다.
  */
 USTRUCT(BlueprintType)
 struct FBaamCharacterRow : public FTableRowBase
@@ -228,7 +230,7 @@ struct FBaamCharacterRow : public FTableRowBase
 	GENERATED_BODY()
 
 public:
-	// 이 Row 를 식별하는 태그 (Role.* 또는 Character.Ability.*).
+	// 이 Row 를 식별하는 태그 (Role.* 또는 Character.Job.*).
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FGameplayTag CharacterTag;
 

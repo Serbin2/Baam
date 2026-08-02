@@ -148,24 +148,16 @@ namespace Bang
 
 	namespace Character
 	{
-		namespace Ability
+		namespace Job
 		{
-			UE_DEFINE_GAMEPLAY_TAG(PaulRegret,    "Character.Ability.PaulRegret")
-			UE_DEFINE_GAMEPLAY_TAG(RoseDoolan,    "Character.Ability.RoseDoolan")
-			UE_DEFINE_GAMEPLAY_TAG(WillyTheKid,   "Character.Ability.WillyTheKid")
-			UE_DEFINE_GAMEPLAY_TAG(SlabTheKiller, "Character.Ability.SlabTheKiller")
-			UE_DEFINE_GAMEPLAY_TAG(LuckyDuke,     "Character.Ability.LuckyDuke")
-			UE_DEFINE_GAMEPLAY_TAG(Jourdonnais,   "Character.Ability.Jourdonnais")
-			UE_DEFINE_GAMEPLAY_TAG(CalamityJanet, "Character.Ability.CalamityJanet")
-			UE_DEFINE_GAMEPLAY_TAG(BartCassidy,   "Character.Ability.BartCassidy")
-			UE_DEFINE_GAMEPLAY_TAG(ElGringo,      "Character.Ability.ElGringo")
-			UE_DEFINE_GAMEPLAY_TAG(SuzyLafayette, "Character.Ability.SuzyLafayette")
-			UE_DEFINE_GAMEPLAY_TAG(SidKetchum,    "Character.Ability.SidKetchum")
-			UE_DEFINE_GAMEPLAY_TAG(VultureSam,    "Character.Ability.VultureSam")
-			UE_DEFINE_GAMEPLAY_TAG(JesseJones,    "Character.Ability.JesseJones")
-			UE_DEFINE_GAMEPLAY_TAG(PedroRamirez,  "Character.Ability.PedroRamirez")
-			UE_DEFINE_GAMEPLAY_TAG(KitCarlson,    "Character.Ability.KitCarlson")
-			UE_DEFINE_GAMEPLAY_TAG(BlackJack,     "Character.Ability.BlackJack")
+			UE_DEFINE_GAMEPLAY_TAG(Warrior,   "Character.Job.Warrior")
+			UE_DEFINE_GAMEPLAY_TAG(Mage,      "Character.Job.Mage")
+			UE_DEFINE_GAMEPLAY_TAG(Rogue,     "Character.Job.Rogue")
+			UE_DEFINE_GAMEPLAY_TAG(Cleric,    "Character.Job.Cleric")
+			UE_DEFINE_GAMEPLAY_TAG(Ranger,    "Character.Job.Ranger")
+			UE_DEFINE_GAMEPLAY_TAG(Paladin,   "Character.Job.Paladin")
+			UE_DEFINE_GAMEPLAY_TAG(Berserker, "Character.Job.Berserker")
+			UE_DEFINE_GAMEPLAY_TAG(Alchemist, "Character.Job.Alchemist")
 		}
 	}
 
