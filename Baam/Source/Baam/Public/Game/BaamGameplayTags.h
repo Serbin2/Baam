@@ -201,29 +201,30 @@ namespace Bang
 	}
 
 	// ---------------------------------------------------------------------------------
-	//  Character.Ability.* — 캐릭터 특수능력 16종 (md §T4).
-	//                        각각 "규칙의 예외" → 패시브 GE/뽑기 오버라이드/이벤트 훅.
+	//  Character.Job.* — 판타지 직업 8종. 스탯과 확률 보정의 정체성을 정한다 (GDD §7).
+	//
+	//  Role.* 과는 축이 완전히 다르다. 섞지 말 것:
+	//    Role.*         = 진영(보안관/부관/무법자/배신자). 승리 조건과 은닉 정보. 숨김.
+	//    Character.Job.* = 직업(전사/마법사/...). 체력·카드 사용 한도·판정 확률 보정. 공개.
+	//  한 플레이어는 둘 다 하나씩 갖는다 — "무법자 마법사" 처럼.
+	//
+	//  ⚠️ 뱅! 원작 캐릭터 16종(PaulRegret 등)은 사거리/수트/응답 규칙의 예외였다.
+	//     GDD §3 에서 그 규칙들이 전부 비활성화되어 기반이 사라졌으므로 직업으로 대체한다.
+	//     구현 훅은 "규칙의 예외" 가 아니라 UBaamDiceComponent::ApplyModifiers 가 읽는
+	//     AttributeSet 의 WeightBonus*/WeightMult* 보정이다 (GDD §4.2).
 	// ---------------------------------------------------------------------------------
 	namespace Character
 	{
-		namespace Ability
+		namespace Job
 		{
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(PaulRegret)    // 거리 +1
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(RoseDoolan)    // 거리 -1
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(WillyTheKid)   // BANG! 무제한
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(SlabTheKiller) // Missed! 2장 필요
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(LuckyDuke)     // 뽑기 2장 중 선택
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Jourdonnais)   // 배럴 내장
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(CalamityJanet) // BANG!/Missed! 상호 사용
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(BartCassidy)   // 피해 1당 1장 뽑기
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(ElGringo)      // 피해 준 자 손패 1장 획득
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(SuzyLafayette) // 손패 0장이면 1장 뽑기
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(SidKetchum)    // 손패 2장 버려 회복
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(VultureSam)    // 사망자 카드 전부 획득
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(JesseJones)    // 첫 장을 남의 손에서
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(PedroRamirez)  // 첫 장을 버린 패에서
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(KitCarlson)    // 3장 보고 2장 선택
-			UE_DECLARE_GAMEPLAY_TAG_EXTERN(BlackJack)     // 2번째 공개, 하트/다이아면 1장 더
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Warrior)    // 전사     — 성공률 ↑, 대성공률 ↓. 기복 없는 딜러
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mage)       // 마법사   — 대성공률 ↑↑, 대실패율 ↑. 한 방
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Rogue)      // 도적     — 카드 사용 한도 +1, 카드당 위력 ↓
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cleric)     // 성직자   — 회복 계열 판정·회복량 보정
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ranger)     // 궁수     — 드로우 보정. 손패로 선택지를 번다
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Paladin)    // 기사     — 체력 ↑, 받는 피해 완화. 탱커
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Berserker)  // 광전사   — 체력 ↓, 공격 피해 ↑. 고위험 고수익
+			UE_DECLARE_GAMEPLAY_TAG_EXTERN(Alchemist)  // 연금술사 — 대실패를 실패로 낮추는 등 판정 완화
 		}
 	}
 
